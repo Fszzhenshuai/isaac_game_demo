@@ -1,49 +1,31 @@
-html, body {
-    width: 100%;
-    height: 100%;
+body {
     margin: 0;
     padding: 0;
-    background-color: #000;
+    background-color: #222;
     overflow: hidden;
-    touch-action: none;
-}
-
-#game-container {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    top: 0;
-    left: 0;
+    touch-action: none; /* 防止移动端滚动 */
     display: flex;
     justify-content: center;
     align-items: center;
-    background: #000;
+    height: 100vh;
 }
 
-canvas {
-    display: block;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
+#game-container {
     box-shadow: 0 0 20px rgba(0,0,0,0.5);
 }
 
-/* UI 层 */
-#ui-layer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 100;
+canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
 }
 
-#instructions {
+#ui-layer {
     position: absolute;
     top: 10px;
     left: 10px;
     color: white;
-    font-family: sans-serif;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    pointer-events: none; /* 让点击穿透到canvas */
     text-shadow: 1px 1px 0 #000;
 }
 
@@ -53,11 +35,13 @@ canvas {
     opacity: 0.8;
 }
 
-@media (max-width: 600px) {
-    #instructions { display: none; } /* 手机上隐藏繁琐文字 */
+/* 简单的移动端适配，确保全屏 */
+@media (max-width: 800px) {
+    #instructions {
+        font-size: 10px;
+    }
 }
 
-/* --- 旋转提示层 (仅在竖屏显示) --- */
 #orientation-warning {
     display: none;
     position: fixed;
@@ -72,9 +56,7 @@ canvas {
     text-align: center;
 }
 
-#orientation-warning h1 { font-size: 24px; margin-bottom: 10px; }
-#orientation-warning p { font-size: 16px; color: #aaa; }
-
 @media screen and (orientation: portrait) {
     #orientation-warning { display: flex; }
+    #game-container, #ui-layer { display: none; }
 }
