@@ -1266,21 +1266,46 @@ function update(time, delta) {
     }
 
     // --- Dash Logic ---
-    if (this.wasd.dash.isDown && time > playerStats.nextDash && !playerStats.isDashing) {
+    if ((this.wasd.dash.isDown || (typeof mobileInput !== 'undefined' && mobileInput.dash)) && time > playerStats.nextDash && !playerStats.isDashing) {
         // Dash Initiation
         let dx = 0; let dy = 0;
+        
+        // Priority: Joystick -> Keyboard
+        if (typeof leftStick !== 'undefined' && leftStick.active) {
+             let jx = leftStick.x - leftStick.baseX;
+             let jy = leftStick.y - leftStick.baseY;
+             if(Math.abs(jx)>5 || Math.abs(jy)>5) {
+                 // Normalize rough direction for standard dash or use precise angle?
+                 // The game uses 8-way dash style mostly but code supports arbitrary angle
+                 // existing logic below uses wasd checks.
+                 // We will override if joystick is active.
+             }
+        }
+        
         if (this.wasd.left.isDown) dx = -1;
         else if (this.wasd.right.isDown) dx = 1;
         if (this.wasd.up.isDown) dy = -1;
         else if (this.wasd.down.isDown) dy = 1;
         
+        // Mobile Joystick Override
+        let joyAngle = null;
+        if (typeof leftStick !== 'undefined' && leftStick.active) {
+              let jx = leftStick.x - leftStick.baseX;
+              let jy = leftStick.y - leftStick.baseY;
+              if (jx*jx + jy*jy > 25) { // Minimal threshold
+                   joyAngle = Math.atan2(jy, jx);
+                   dx = Math.cos(joyAngle);
+                   dy = Math.sin(joyAngle);
+              }
+        }
+
         // If no direction, dash towards mouse? Or facing? Default to facing right or last move?
         // Let's settle for movement direction, nothing = no dash
         if (dx !== 0 || dy !== 0) {
             playerStats.isDashing = true;
             playerStats.nextDash = time + playerStats.dashCooldown;
             player.body.stop(); // Clear current vel
-            let angle = Math.atan2(dy, dx);
+            let angle = joyAngle !== null ? joyAngle : Math.atan2(dy, dx);
             scene.physics.velocityFromRotation(angle, playerStats.dashSpeed, player.body.velocity);
             
             // Trigger Effects
@@ -1449,9 +1474,47 @@ function update(time, delta) {
     
     if (fx !== 0 || fy !== 0) shooting = true;
 
-    if (this.input.activePointer.isDown && (typeof leftStick === 'undefined' || !leftStick.active || this.input.activePointer.id !== leftStick.pointerId)) {
-        if (playerStats.playStyle === 'sword') fireSwordAt(player.x, player.y, this.input.activePointer.x, this.input.activePointer.y, time);
-        else fireAt(player.x, player.y, this.input.activePointer.x, this.input.activePointer.y, time);
+    // Mobile Fire Button Override
+    if (typeof mobileInput !== 'undefined' && mobileInput.fire && time > lastFired) {
+        // Auto-aim closest enemy or shoot strictly forward
+        let closest = null;
+        let minDist = 600;
+        if (enemies) { 
+            enemies.children.iterate(e => {
+                if (e.active) {
+                    let d = Phaser.Math.Distance.Between(player.x, player.y, e.x, e.y);
+                    if(d < minDist) { minDist = d; closest = e; }
+                }
+            });
+        }
+        
+        // Priority: Closest Enemy -> Movement Direction -> Default Right
+        if (closest) {
+             if (playerStats.playStyle === 'sword') fireSwordAt(player.x, player.y, closest.x, closest.y, time);
+             else fireAt(player.x, player.y, closest.x, closest.y, time);
+        } else {
+             // Use movement velocity or default
+             let tx = (player.body.velocity.x !== 0 || player.body.velocity.y !== 0) ? player.body.velocity.x : 1;
+             let ty = (player.body.velocity.x !== 0 || player.body.velocity.y !== 0) ? player.body.velocity.y : 0;
+             if (playerStats.playStyle === 'sword') fireSwordDir(player.x, player.y, tx, ty, time);
+             else fireDir(player.x, player.y, tx, ty, time);
+        }
+    } 
+    // Mouse/Touch (Only if NOT touching controls)
+    else if (this.input.activePointer.isDown && (!leftStick || !leftStick.active || this.input.activePointer.id !== leftStick.pointerId) 
+        && (!mobileInput.fire) // Don't fire at pointer if pressing fire button 
+        ) {
+        // Simple zone exclusion for buttons (hacky: if pointerX > 600 && pointerY > 400, ignore?)
+        // Better: Buttons already capture input via 'pointerdown' on GameObject.
+        // However, scene input might still trigger. Let's rely on GameObject interactive stopping propagation? 
+        // Phaser Input Plugin doesn't auto-stop scene pointerdown.
+        // We just check coordinates loosely to prevent accidental firing when pressing specific UI
+        let isUI = (this.input.activePointer.x > 550 && this.input.activePointer.y > 400) || (this.input.activePointer.x > 700 && this.input.activePointer.y < 100);
+        
+        if (!isUI) {
+             if (playerStats.playStyle === 'sword') fireSwordAt(player.x, player.y, this.input.activePointer.x, this.input.activePointer.y, time);
+             else fireAt(player.x, player.y, this.input.activePointer.x, this.input.activePointer.y, time);
+        }
     } else if (shooting && time > lastFired) {
         if (playerStats.playStyle === 'sword') fireSwordDir(player.x, player.y, fx, fy, time);
         else fireDir(player.x, player.y, fx, fy, time);
@@ -4266,6 +4329,14 @@ function onDashStart(scene, player) {
     }
 }
 
+// --- Global Mobile Input State ---
+let mobileInput = {
+    fire: false,
+    active: false,
+    pause: false,
+    dash: false
+};
+
 function setupTouchControls() {
     /*
     // Add Pointer for Dash Button
@@ -4319,24 +4390,102 @@ function setupTouchControls() {
     });
     */
 
-    if (typeof leftStick === 'undefined') return;
-    this.input.addPointer(2); // Enable multi-touch
-    this.input.on('pointerdown', (pointer) => {
-        // Left side for joystick, except if hitting dash button area (handled by gameobject interactive)
-        if (pointer.x < 400) {
-            leftStick.active = true;
-            leftStick.pointerId = pointer.id;
-            leftStick.baseX = pointer.x; leftStick.baseY = pointer.y;
+    // Only set up if touch available or small screen
+    const isMobile = this.sys.game.device.os.android || this.sys.game.device.os.iOS || window.innerWidth < 800;
+    if (!isMobile) return;
+
+    // --- 1. Left Visual Joystick ---
+    // Background Disk
+    const joyX = 120, joyY = 480;
+    const joyBase = this.add.circle(joyX, joyY, 60, 0x333333, 0.5)
+        .setScrollFactor(0).setDepth(210).setInteractive();
+    
+    // Knob
+    const joyKnob = this.add.circle(joyX, joyY, 30, 0x888888, 0.8)
+        .setScrollFactor(0).setDepth(211);
+
+    // Joystick Logic Integration w/ Existing leftStick
+    // We overwrite the dynamic pointer logic with this static one
+    leftStick.baseX = joyX;
+    leftStick.baseY = joyY;
+    
+    this.input.addPointer(2); // Ensure multi-touch
+
+    joyBase.on('pointerdown', (p) => {
+        leftStick.active = true;
+        leftStick.pointerId = p.id;
+        leftStick.x = p.x; leftStick.y = p.y;
+    });
+    
+    // Global move handling is better for stick dragging outside base
+    this.input.on('pointermove', (p) => {
+        if (leftStick.active && p.id === leftStick.pointerId) {
+            // Clamp distance visually
+            let dist = Phaser.Math.Distance.Between(joyX, joyY, p.x, p.y);
+            let angle = Phaser.Math.Angle.Between(joyX, joyY, p.x, p.y);
+            if (dist > 60) dist = 60;
+            
+            // Update visual knob
+            joyKnob.x = joyX + Math.cos(angle) * dist;
+            joyKnob.y = joyY + Math.sin(angle) * dist;
+            
+            // Update logic inputs
+            leftStick.x = p.x; 
+            leftStick.y = p.y;
+            // Hack to keep baseX static
+            leftStick.baseX = joyX;
+            leftStick.baseY = joyY;
         }
     });
-    this.input.on('pointermove', (pointer) => {
-        if (leftStick.active && pointer.id === leftStick.pointerId) {
-            leftStick.x = pointer.x; leftStick.y = pointer.y;
+
+    this.input.on('pointerup', (p) => {
+        if (leftStick.active && p.id === leftStick.pointerId) {
+            leftStick.active = false;
+            joyKnob.x = joyX;
+            joyKnob.y = joyY;
+            // Reset velocity
+            leftStick.x = joyX; leftStick.y = joyY;
         }
     });
-    this.input.on('pointerup', (pointer) => {
-        if (leftStick.active && pointer.id === leftStick.pointerId) leftStick.active = false;
+
+    // --- 2. Right Side Buttons ---
+    
+    // A. Fire Button (Big Red Button) - Bottom Right
+    const btnFire = this.add.circle(700, 480, 50, 0xff0000, 0.4)
+        .setScrollFactor(0).setDepth(210).setInteractive();
+    this.add.text(700, 480, "FIRE", { fontSize: '20px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    
+    btnFire.on('pointerdown', () => mobileInput.fire = true);
+    btnFire.on('pointerup', () => mobileInput.fire = false);
+    btnFire.on('pointerout', () => mobileInput.fire = false);
+
+    // B. Active Item (E) - Above Fire
+    const btnActive = this.add.circle(620, 480 - 65, 30, 0x00ff00, 0.4)
+        .setScrollFactor(0).setDepth(210).setInteractive();
+    this.add.text(620, 480 - 65, "USE", { fontSize: '14px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    
+    btnActive.on('pointerdown', () => {
+        useActiveItem(this);
     });
+
+    // D. Dash (Space) - Left of Fire
+    const btnDash = this.add.circle(700 - 85, 480, 40, 0x00aaff, 0.4)
+        .setScrollFactor(0).setDepth(210).setInteractive();
+    this.add.text(700 - 85, 480, "ROLL", { fontSize: '18px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    
+    btnDash.on('pointerdown', () => mobileInput.dash = true);
+    btnDash.on('pointerup', () => mobileInput.dash = false);
+    btnDash.on('pointerout', () => mobileInput.dash = false);
+
+    // C. Return/Pause (Esc) - Top Right
+    const btnPause = this.add.rectangle(760, 40, 60, 40, 0x444444, 0.8)
+        .setScrollFactor(0).setDepth(210).setInteractive();
+    this.add.text(760, 40, "||", { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    
+    btnPause.on('pointerdown', () => {
+        togglePause(this);
+    });
+
 }
 
 function drawMinimap() {
