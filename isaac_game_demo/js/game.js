@@ -3574,10 +3574,10 @@ function createUIContainers(scene) {
     inventoryUI.scrollHandle = scene.add.rectangle(280, -150, 10, 50, 0xaaaaaa);
     inventoryUI.add(inventoryUI.scrollHandle);
     
-    // Input for scrolling
-    scene.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+    // Input for scrolling (Unified: Wheel + Touch)
+    const handleScroll = (deltaY) => {
         if (inventoryUI.visible) {
-            inventoryUI.scrollContainer.y -= deltaY * 0.5;
+            inventoryUI.scrollContainer.y -= deltaY;
             // Clamp
             const contentHeight = inventoryUI.scrollContainer.height || 100;
             const viewHeight = 340;
@@ -3590,12 +3590,13 @@ function createUIContainers(scene) {
             // Update handle
             if (contentHeight > viewHeight) {
                 let range = maxY - minY;
+                if (range === 0) range = 1;
                 let pct = (maxY - inventoryUI.scrollContainer.y) / range;
                 inventoryUI.scrollHandle.y = -150 + pct * (340 - 50);
             }
         } 
         else if (compendiumUI.visible) {
-            compendiumUI.contentContainer.y -= deltaY * 0.5;
+            compendiumUI.contentContainer.y -= deltaY;
             // Clamp
             const contentHeight = compendiumUI.contentContainer.height || 100;
             const viewHeight = 420;
@@ -3608,11 +3609,35 @@ function createUIContainers(scene) {
             // Update handle
             if (contentHeight > viewHeight) {
                 let range = maxY - minY;
+                if (range === 0) range = 1;
                 let pct = (maxY - compendiumUI.contentContainer.y) / range;
                 compendiumUI.scrollHandle.y = -180 + pct * (420 - 50);
             }
         }
+    };
+
+    scene.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+        handleScroll(deltaY * 0.5);
     });
+
+    // Touch Drag Scrolling
+    let isDraggingUI = false;
+    let lastDragY = 0;
+    scene.input.on('pointerdown', (pointer) => {
+        if (inventoryUI.visible || compendiumUI.visible) {
+            isDraggingUI = true;
+            lastDragY = pointer.y;
+        }
+    });
+    scene.input.on('pointermove', (pointer) => {
+        if (isDraggingUI && (inventoryUI.visible || compendiumUI.visible)) {
+            const dy = (lastDragY - pointer.y);
+            handleScroll(dy);
+            lastDragY = pointer.y;
+        }
+    });
+    scene.input.on('pointerup', () => { isDraggingUI = false; });
+    scene.input.on('pointerout', () => { isDraggingUI = false; });
 
     // UI: Help
     helpUI = scene.add.container(400, 300).setScrollFactor(0);
@@ -4484,6 +4509,19 @@ function setupTouchControls() {
     
     btnPause.on('pointerdown', () => {
         togglePause(this);
+    });
+
+    // E. Fullscreen (Top Left)
+    const btnFull = this.add.rectangle(40, 40, 50, 40, 0x222222, 0.8)
+        .setScrollFactor(0).setDepth(210).setInteractive();
+    this.add.text(40, 40, "[ ]", { fontSize: '20px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    
+    btnFull.on('pointerdown', () => {
+        if (this.scale.isFullscreen) {
+            this.scale.stopFullscreen();
+        } else {
+            this.scale.startFullscreen();
+        }
     });
 
 }
