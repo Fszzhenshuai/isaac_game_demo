@@ -16,17 +16,21 @@ html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
+    background-color: #000;
 }
 
 #game-container {
     width: 100%;
     height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    overflow: hidden;
+    position: relative; /* Phaser needs a positioned parent sometimes */
 }
 
 canvas {
+    display: block;
+    /* Do NOT force 100% here, let Phaser handle aspect ratio scaling */
+    /* width: 100% !important; */
+    /* height: 100% !important; */
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     box-shadow: 0 0 20px rgba(0,0,0,0.5);

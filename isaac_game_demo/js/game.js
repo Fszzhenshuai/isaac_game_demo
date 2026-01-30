@@ -1,9 +1,13 @@
 // Game Configuration
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 600,
-    parent: 'game-container',
+    scale: {
+        mode: Phaser.Scale.FIT, 
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 800,
+        height: 600,
+        parent: 'game-container'
+    },
     backgroundColor: '#333',
     pixelArt: true,
     physics: {
@@ -13,10 +17,6 @@ const config = {
             debug: false
         }
     },
-    scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
-    },
     scene: {
         preload: preload,
         create: create,
@@ -25,6 +25,15 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
+
+// Force resize check on load and orientation change
+window.addEventListener('resize', () => {
+    game.scale.refresh();
+});
+window.addEventListener('orientationchange', () => {
+    // Small delay to allow browser layout to update
+    setTimeout(() => game.scale.refresh(), 100);
+});
 
 // Global Variables
 let player;
