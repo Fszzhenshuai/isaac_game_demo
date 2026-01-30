@@ -1,0 +1,43 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #222;
+    overflow: hidden;
+    touch-action: none; /* 防止移动端滚动 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+#game-container {
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+#ui-layer {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    pointer-events: none; /* 让点击穿透到canvas */
+    text-shadow: 1px 1px 0 #000;
+}
+
+#instructions p {
+    margin: 5px 0;
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+/* 简单的移动端适配，确保全屏 */
+@media (max-width: 800px) {
+    #instructions {
+        font-size: 10px;
+    }
+}
