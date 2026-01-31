@@ -4258,7 +4258,7 @@ function updatePlayerHealthUI(scene) {
             stroke: '#000000',
             strokeThickness: 2,
             fontFamily: 'Arial'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1001); // Stick to screen
 
         scene.heartGroup.add(heart);
     }
@@ -4634,19 +4634,16 @@ function setupTouchControls() {
         const h = gameSize.height;
         
         // Update Joystick
-        joyY = h - 60;
+        joyY = h - 100; // Raised higher as requested
         joyX = 100;
         joyBase.setPosition(joyX, joyY);
         joyKnob.setPosition(joyX, joyY);
         leftStick.baseX = joyX;
-        // leftStick.baseY should NOT be updated here to joyY 
-        // because the 'resize' event might trigger during a drag?
-        // No, resize resets UI. Drag will be cancelled.
         leftStick.baseY = joyY;
 
         // Update Buttons
         btnBaseX = w - 60;
-        btnBaseY = h - 60;
+        btnBaseY = h - 80; // Slightly higher too
         
         btnFire.setPosition(btnBaseX, btnBaseY);
         txtFire.setPosition(btnBaseX, btnBaseY);
@@ -4660,40 +4657,69 @@ function setupTouchControls() {
         btnPause.setPosition(w - 40, 40);
         txtPause.setPosition(w - 40, 40);
 
-        // Update UI Centers
+        // Update UI Centers and Scaling for Compendium
         if (compendiumUI) {
              compendiumUI.setPosition(w/2, h/2);
-             // Update Mask if needed - Scale mask relative to center?
-             // Mask rects were hardcoded. We need to clear and redraw mask helper
+             
+             // Dynamic Scale Calculation
+             // Target size ~660x420 content.
+             // We want padding of 40px all around.
+             const availW = w - 80;
+             const availH = h - 80;
+             const scaleX = availW / 700;
+             const scaleY = availH / 500;
+             const finalScale = Math.min(1, scaleX, scaleY);
+             compendiumUI.setScale(finalScale);
+
              if (compendiumUI.maskShape) {
                  compendiumUI.maskShape.clear();
                  compendiumUI.maskShape.fillStyle(0xffffff);
-                 // Original Rect: x=70, y=120, w=660, h=420 (Based on 400,300 center)
-                 // New Rect: x = w/2 - 330, y = h/2 - 180 ?
-                 // Relative to Screen TopLeft (0,0)
                  let cx = w/2; let cy = h/2;
-                 // Comp Container content starts at -180 y?
-                 // Let's approximate: Center - Width/2 ...
-                 // Mask needs to cover the content area.
-                 // Content is roughly -330 to +330 X, -180 to +230 Y relative to center
-                 // So Mask X = cx - 330, Y = cy - 180, W=660, H=420?
-                 compendiumUI.maskShape.fillRect(cx - 330 * compendiumUI.scaleX, cy - 180 * compendiumUI.scaleY, 660 * compendiumUI.scaleX, 420 * compendiumUI.scaleY);
+                 // Mask must cover the content relative to new center and scale
+                 // The content mask is hardcoded for the content container
+                 // Rect X/Y are relative to screen top-left (0,0) because mask is absolute?
+                 // No, standard GeometryMask uses world coordinates.
+                 // With ScrollFactor(0), it uses Screen Coordinates (0,0 at TL).
+                 // Center is w/2, h/2.
+                 // Content Box is 660x420.
+                 // Scaled W = 660 * finalScale. Scaled H = 420 * finalScale.
+                 // TopLeft X = cx - (330 * finalScale) ?
+                 // The default content starts roughly 180px up from center?
+                 // Original Rect: x=70, y=120 (for center 400,300) -> -330, -180 relative to center 
+                 
+                 let rw = 660 * finalScale;
+                 let rh = 420 * finalScale;
+                 // Center of content area relative to container center is roughly (0, +30) ? 
+                 // Wait, original rect 70,120 (400 center) => Left=-330, Top=-180
+                 // So relative to center, it is X-330, Y-180.
+                 let rx = cx - 330 * finalScale;
+                 let ry = cy - 180 * finalScale;
+                 
+                 compendiumUI.maskShape.fillRect(rx, ry, rw, rh);
              }
         }
         if (inventoryUI) {
              inventoryUI.setPosition(w/2, h/2);
+             
+             const availW = w - 80;
+             const availH = h - 80;
+             const scaleFinal = Math.min(1, availW/600, availH/340);
+             inventoryUI.setScale(scaleFinal);
+
              if (inventoryUI.maskShape) {
                  inventoryUI.maskShape.clear();
                  inventoryUI.maskShape.fillStyle(0xffffff);
                  let cx = w/2; let cy = h/2;
-                 // Original: 100, 150, 600, 340 (Based on 400,300)
-                 // Rect relative to center 400,300 was: -300,+300 x, -150,+190 y
-                 inventoryUI.maskShape.fillRect(cx - 300 * inventoryUI.scaleX, cy - 150 * inventoryUI.scaleY, 600 * inventoryUI.scaleX, 340 * inventoryUI.scaleY);
+                 // Original: 100, 150 (Center 400,300) => -300, -150
+                 let rw = 600 * scaleFinal;
+                 let rh = 340 * scaleFinal;
+                 let rx = cx - 300 * scaleFinal;
+                 let ry = cy - 150 * scaleFinal;
+                 inventoryUI.maskShape.fillRect(rx, ry, rw, rh);
              }
         }
         
-        // Recenter Camera just in case
-        this.cameras.main.centerOn(400, 300);
+        // Recenter Camera just in case? No, following player.
     });
     
     btnFull.on('pointerdown', toggleFullScreen);
