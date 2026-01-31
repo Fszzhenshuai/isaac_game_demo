@@ -1861,17 +1861,27 @@ function update(time, delta) {
                  }
              } else if (e.aiType === 'boss_monstro') {
                  // Monstro: Jump -> Smash
+                 // Nerfed: Jump speed 400->250, Prep time increased
                  if (e.aiState === 0) { // Prep
                      e.setVelocity(0,0);
-                     if(Math.random()<0.05) { e.aiState=1; e.aiStateTimer = time + 1000; e.setScale(1.2); }
+                     // Reduced jump chance 0.05 -> 0.02
+                     if(Math.random()<0.02) { 
+                         e.aiState=1; 
+                         e.aiStateTimer = time + 1000; 
+                         e.setScale(1.2); 
+                         // Pre-jump warning color
+                         e.setTint(0xffaaaa);
+                     }
                  } else if (e.aiState === 1) { // Jump
-                     scene.physics.moveToObject(e, player, 400);
+                     // Slower jump speed
+                     scene.physics.moveToObject(e, player, 250); 
                      if (time > e.aiStateTimer) {
                          // Land
                          e.aiState = 2; 
-                         e.aiStateTimer = time + 1000;
+                         e.aiStateTimer = time + 1500; // Longer recovery
                          e.setVelocity(0,0);
                          e.setScale(1.5); // restore
+                         e.clearTint();
                          scene.cameras.main.shake(100, 0.01);
                          for(let i=0; i<12; i++) {
                              let angle = (i / 12) * Math.PI * 2;
@@ -3468,6 +3478,54 @@ function gameOver(scene) {
     uiLayer.add([t1, t2]);
 }
 
+function showPickupNotification(scene, text, desc) {
+    if (!scene.pickupNotification) {
+        scene.pickupNotification = scene.add.container(400, 500).setScrollFactor(0).setDepth(200);
+        let bg = scene.add.graphics();
+        bg.fillStyle(0x000000, 0.7);
+        bg.fillRoundedRect(-200, -40, 400, 80, 10);
+        bg.lineStyle(2, 0xffd700);
+        bg.strokeRoundedRect(-200, -40, 400, 80, 10);
+        
+        let tx = scene.add.text(0, -15, "", { fontSize: '24px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5);
+        let ds = scene.add.text(0, 15, "", { fontSize: '16px', color: '#ffffff' }).setOrigin(0.5);
+        
+        scene.pickupNotification.add([bg, tx, ds]);
+        scene.pickupNotification.bg = bg; // ref
+        scene.pickupNotification.tx = tx;
+        scene.pickupNotification.ds = ds;
+    }
+    
+    // Position at bottom center (above joystick area roughly)
+    const yPos = scene.scale.height - 120;
+    scene.pickupNotification.setPosition(scene.scale.width/2, yPos);
+    
+    scene.pickupNotification.tx.setText(text);
+    scene.pickupNotification.ds.setText(desc || "");
+    scene.pickupNotification.setAlpha(0);
+    scene.pickupNotification.setVisible(true);
+    
+    // Animation
+    scene.tweens.killTweensOf(scene.pickupNotification);
+    scene.tweens.add({
+        targets: scene.pickupNotification,
+        alpha: 1,
+        y: yPos - 20, // Float up slightly
+        duration: 300,
+        hold: 2500,
+        yoyo: true, // Fade out logic handled by callback or yoyo? Yoyo makes it fade out but reset alpha? 
+        // Better:
+        onComplete: () => {
+             scene.tweens.add({
+                 targets: scene.pickupNotification,
+                 alpha: 0,
+                 duration: 500,
+                 delay: 2000
+             });
+        }
+    });
+}
+
 function pickItem(player, item) {
     const scene = this; // Context
     let data = item.dataRef;
@@ -3489,6 +3547,11 @@ function pickItem(player, item) {
 
     SoundSystem.playItem();
     
+    // Notification on Mobile
+    let itemName = data.name;
+    let itemDesc = data.desc || "";
+    showPickupNotification(scene, "获得: " + itemName, itemDesc);
+
     // Visual Pickup Effect
     scene.tweens.add({
         targets: item,
@@ -3831,7 +3894,7 @@ function createUIContainers(scene) {
 
     // UI: Pause Menu
     pauseUI = scene.add.container(400, 300).setScrollFactor(0);
-    pauseUI.setDepth(250);
+    pauseUI.setDepth(3000); // Max Depth
     pauseUI.setVisible(false);
     
     // Large Background to cover any screen size
@@ -3839,6 +3902,11 @@ function createUIContainers(scene) {
     pbg.fillStyle(0x000000, 0.85);
     // Huge rectangle centered at 0,0 of container
     pbg.fillRect(-2000, -2000, 4000, 4000); 
+    // Interactive blocking
+    pbg.setInteractive(new Phaser.Geom.Rectangle(-2000, -2000, 4000, 4000), Phaser.Geom.Rectangle.Contains);
+    // Consume inputs so game doesn't receive them
+    pbg.on('pointerdown', () => {}); 
+
     pauseUI.add(pbg);
     
     pauseUI.add(scene.add.text(0, -250, "暂停中", { fontSize: '64px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
@@ -4705,8 +4773,12 @@ function setupTouchControls() {
 
     // C. Return/Pause (Esc) - Top Right
     const btnPause = this.add.rectangle(this.scale.width - 40, 40, 60, 40, 0x444444, 0.8)
-        .setScrollFactor(0).setDepth(210).setInteractive();
-    const txtPause = this.add.text(this.scale.width - 40, 40, "||", { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+        .setScrollFactor(0).setDepth(2000).setInteractive(); // Depth boosted to 2000
+    const txtPause = this.add.text(this.scale.width - 40, 40, "||", { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+    
+    // Explicitly hide the desktop button if mobile controls are active
+    // We can find the desktop button via a global or by tag if we had one.
+    // For now, let's assume the mobile one covers it or is sufficient.
     
     btnPause.on('pointerdown', () => {
         togglePause(this);
@@ -4714,8 +4786,8 @@ function setupTouchControls() {
 
     // E. Fullscreen (Top Left) - Improved Logic
     const btnFull = this.add.rectangle(40, 40, 50, 40, 0x222222, 0.8)
-        .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(40, 40, "[ ]", { fontSize: '20px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+        .setScrollFactor(0).setDepth(2000).setInteractive(); // Depth boosted
+    this.add.text(40, 40, "[ ]", { fontSize: '20px' }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     
     const toggleFullScreen = () => {
         if (this.scale.isFullscreen) {
