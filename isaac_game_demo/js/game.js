@@ -3458,24 +3458,32 @@ function gameOver(scene) {
     if (player) player.setTint(0x000000);
     scene.physics.pause();
     
-    // UI Layer is scrollFactor(0), so these will stay on screen
+    // Use a High Depth Container to ensure it's on top of EVERYTHING
+    let gameOverUI = scene.add.container(400, 300).setScrollFactor(0).setDepth(4000);
+    
     // Add semi-transparent black background
-    const bg = scene.add.rectangle(400, 300, 2000, 2000, 0x000000, 0.7);
-    uiLayer.add(bg);
+    const bg = scene.add.rectangle(0, 0, 4000, 4000, 0x000000, 0.7);
+    bg.setInteractive(); // Block other inputs
+    gameOverUI.add(bg);
 
-    const t1 = scene.add.text(400, 250, "游戏结束", { fontSize: '64px', color: '#ff0000', stroke: '#000', strokeThickness: 6, align: 'center' }).setOrigin(0.5);
-    const t2 = scene.add.text(400, 350, "点击重试", { fontSize: '32px', color: '#fff', align: 'center' }).setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-        
-    t2.on('pointerdown', () => {
+    const t1 = scene.add.text(0, -50, "游戏结束", { fontSize: '64px', color: '#ff0000', stroke: '#000', strokeThickness: 6, align: 'center' }).setOrigin(0.5);
+    
+    // Large Hitbox for Retry
+    let retryContainer = scene.add.container(0, 50);
+    let retryBg = scene.add.rectangle(0, 0, 300, 80, 0x333333).setInteractive();
+    let t2 = scene.add.text(0, 0, "点击重试", { fontSize: '32px', color: '#fff', align: 'center' }).setOrigin(0.5);
+    retryContainer.add([retryBg, t2]);
+    
+    retryBg.on('pointerdown', () => {
         console.log("Restarting game...");
         window.location.reload(); 
     });
     
-    // Ensure input works even when paused (Phaser 3 default behavior allows UI input during pause, but just in case)
-    scene.input.topOnly = true; 
+    // Hover effect
+    retryBg.on('pointerover', () => { t2.setColor('#ffff00'); retryBg.setFillStyle(0x555555); });
+    retryBg.on('pointerout', () => { t2.setColor('#ffffff'); retryBg.setFillStyle(0x333333); });
 
-    uiLayer.add([t1, t2]);
+    gameOverUI.add([t1, retryContainer]);
 }
 
 function showPickupNotification(scene, text, desc) {
@@ -3547,11 +3555,6 @@ function pickItem(player, item) {
 
     SoundSystem.playItem();
     
-    // Notification on Mobile
-    let itemName = data.name;
-    let itemDesc = data.desc || "";
-    showPickupNotification(scene, "获得: " + itemName, itemDesc);
-
     // Visual Pickup Effect
     scene.tweens.add({
         targets: item,
@@ -3564,6 +3567,9 @@ function pickItem(player, item) {
 
     // Active Item Logic
     if (data.type === 'active') {
+        // Notification for Active Item
+        showPickupNotification(scene, "获得: " + data.name, data.desc || "");
+        
         const previousItem = playerStats.activeItem;
         
         // Equip new Active
@@ -3574,6 +3580,7 @@ function pickItem(player, item) {
         let notif = "Equipped: " + data.name;
         if (previousItem) notif += "\n(Dropped: " + previousItem.name + ")";
         
+        // Text popup (legacy)
         let txt = scene.add.text(player.x, player.y-60, notif, { fontSize: '18px', color: '#00ff00', stroke: '#000', strokeThickness: 4, align:'center' }).setOrigin(0.5);
         scene.tweens.add({ targets: txt, y: player.y-100, alpha:0, duration: 2000, onComplete: ()=>txt.destroy() });
         
@@ -3590,6 +3597,9 @@ function pickItem(player, item) {
 
     data.apply(playerStats, data);
     
+    // Notification for Passive Item (AFTER apply to show Glitch effects)
+    showPickupNotification(scene, "获得: " + data.name, data.desc || "");
+
     // --- Stat Balancing / Clamping ---
     // Prevent game-breaking or crashing values
     playerStats.fireRate = Math.max(60, playerStats.fireRate); // Min 60ms delay (~16 shots/sec cap)
@@ -3894,59 +3904,70 @@ function createUIContainers(scene) {
 
     // UI: Pause Menu
     pauseUI = scene.add.container(400, 300).setScrollFactor(0);
-    pauseUI.setDepth(3000); // Max Depth
+    pauseUI.setDepth(3000); // 3000 should cover everything
     pauseUI.setVisible(false);
     
-    // Large Background to cover any screen size
-    const pbg = scene.add.graphics();
-    pbg.fillStyle(0x000000, 0.85);
-    // Huge rectangle centered at 0,0 of container
-    pbg.fillRect(-2000, -2000, 4000, 4000); 
-    // Interactive blocking
-    pbg.setInteractive(new Phaser.Geom.Rectangle(-2000, -2000, 4000, 4000), Phaser.Geom.Rectangle.Contains);
-    // Consume inputs so game doesn't receive them
-    pbg.on('pointerdown', () => {}); 
-
+    // Replace Graphics Blocking with a simple Rectangle Shape + Large Hit Area
+    // This is often more reliable on Mobile than Graphics interactive
+    const pbg = scene.add.rectangle(0, 0, 4000, 4000, 0x000000, 0.85);
+    pbg.setInteractive(); // By default uses size
+    pbg.on('pointerdown', () => { /* Swallow */ });
+    
     pauseUI.add(pbg);
     
     pauseUI.add(scene.add.text(0, -250, "暂停中", { fontSize: '64px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
     
+    // Resume Button - Increased Size and Hit Area for Mobile
+    const createLargeBtn = (text, y, callback) => {
+        // Invisible container for larger hit area
+        let container = scene.add.container(0, y);
+        
+        let box = scene.add.rectangle(0, 0, 300, 50, 0x444444).setInteractive(); // 300x50 click area
+        let txt = scene.add.text(0, 0, text, { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
+        
+        container.add([box, txt]);
+        
+        box.on('pointerdown', callback);
+        box.on('pointerover', () => txt.setColor('#ffff00'));
+        box.on('pointerout', () => txt.setColor('#ffffff'));
+        
+        return container;
+    };
+    
     // Resume
-    pauseUI.add(createBtn("继续游戏", -180, () => togglePause(scene)));
+    pauseUI.add(createLargeBtn("继续游戏", -180, () => togglePause(scene)));
 
     // Difficulty Settings
     const diffLabel = scene.add.text(0, -100, "难度:", { fontSize: '24px', color: '#aaa' }).setOrigin(0.5);
     let diffText = scene.add.text(0, -70, "普通 (1.0x)", { fontSize: '24px', color: '#00ff00' }).setOrigin(0.5);
     
-    // Difficulty Buttons
-    const btnEasy = scene.add.text(-100, -30, "简单", { fontSize: '24px', color: '#fff', backgroundColor: '#336633', padding: { x:5, y:2 } }).setOrigin(0.5).setInteractive();
-    const btnNorm = scene.add.text(0, -30, "普通", { fontSize: '24px', color: '#fff', backgroundColor: '#333366', padding: { x:5, y:2 } }).setOrigin(0.5).setInteractive();
-    const btnHard = scene.add.text(100, -30, "困难", { fontSize: '24px', color: '#fff', backgroundColor: '#663333', padding: { x:5, y:2 } }).setOrigin(0.5).setInteractive();
+    // Difficulty Buttons - Make them larger
+    const createDiffBtn = (x, text, colorCode, callback) => {
+        let btn = scene.add.text(x, -30, text, { fontSize: '24px', color: '#fff', backgroundColor: colorCode, padding: { x:15, y:10 } })
+            .setOrigin(0.5)
+            .setInteractive();
+        btn.on('pointerdown', callback);
+        return btn;
+    };
 
-    btnEasy.on('pointerdown', () => { 
-        difficultyMultiplier = 0.5; 
-        diffText.setText("简单 (0.5x)"); 
-        diffText.setColor('#00ffff'); 
+    const btnEasy = createDiffBtn(-100, "简单", '#336633', () => { 
+        difficultyMultiplier = 0.5; diffText.setText("简单 (0.5x)"); diffText.setColor('#00ffff'); 
     });
-    btnNorm.on('pointerdown', () => { 
-        difficultyMultiplier = 1.0; 
-        diffText.setText("普通 (1.0x)"); 
-        diffText.setColor('#00ff00'); 
+    const btnNorm = createDiffBtn(0, "普通", '#333366', () => { 
+        difficultyMultiplier = 1.0; diffText.setText("普通 (1.0x)"); diffText.setColor('#00ff00'); 
     });
-    btnHard.on('pointerdown', () => { 
-        difficultyMultiplier = 1.5; 
-        diffText.setText("困难 (1.5x)"); 
-        diffText.setColor('#ff0000'); 
+    const btnHard = createDiffBtn(100, "困难", '#663333', () => { 
+        difficultyMultiplier = 1.5; diffText.setText("困难 (1.5x)"); diffText.setColor('#ff0000'); 
     });
 
     pauseUI.add([diffLabel, diffText, btnEasy, btnNorm, btnHard]);
 
-    // Other Menus
-    pauseUI.add(createBtn("角色属性", 50, () => toggleStats(scene)));
-    pauseUI.add(createBtn("背包", 100, () => toggleInventory(scene)));
-    pauseUI.add(createBtn("图鉴", 150, () => toggleCompendium(scene)));
-    pauseUI.add(createBtn("帮助", 200, () => toggleHelp(scene)));
-    pauseUI.add(createBtn("重新开始", 250, () => location.reload()));
+    // Other Menus - Use Large Buttons
+    pauseUI.add(createLargeBtn("角色属性", 50, () => toggleStats(scene)));
+    pauseUI.add(createLargeBtn("背包", 120, () => toggleInventory(scene))); // Spaced out more
+    pauseUI.add(createLargeBtn("图鉴", 190, () => toggleCompendium(scene)));
+    pauseUI.add(createLargeBtn("帮助", 260, () => toggleHelp(scene)));
+    pauseUI.add(createLargeBtn("重新开始", 330, () => location.reload()));
 }
 
 function closeAllMenus() {
