@@ -2667,6 +2667,16 @@ function spawnEnemy(scene, x, y, type) {
     }
 
     e = enemies.create(x, y, texture);
+
+    // Hitbox Adjustment: Shrink to match visual texture better (remove empty space)
+    // Most sprites have padding. 60-70% size usually fits the "meat" of the sprite.
+    const bodyScale = 0.6;
+    if (e.body) {
+        // We need to wait for texture to load? No, create syncs unless it's not loaded.
+        // Assuming texture loaded.
+        e.body.setSize(e.width * bodyScale, e.height * bodyScale);
+        e.body.setOffset(e.width * (1-bodyScale)/2, e.height * (1-bodyScale)/2);
+    }
     
     // Logic: If 'ai' property exists in stats, use it. Otherwise use 'type'.
     // We store 'aiBehavior' for logic, 'aiType' for identity/compatibility
@@ -4732,6 +4742,23 @@ function setupTouchControls() {
         
         btnPause.setPosition(w - 40, 40);
         txtPause.setPosition(w - 40, 40);
+        
+        // Update Pause UI (Main Menu)
+        if (typeof pauseUI !== 'undefined' && pauseUI) {
+             pauseUI.setPosition(w/2, h/2);
+             // Ensure background covers screen
+             // Background is index 0 usually, or we can just add a new big one and remove old?
+             // Or just clearing/drawing if it's a graphics object reference we kept?
+             // We didn't keep a ref to pbg, but we can access it via list.
+             // Simplest: Scale the container if needed, OR just know that the 800x600 bg might be too small.
+             
+             // Dynamic Scale for Pause Menu to fit screen
+             // Pause menu content is roughly 400x500.
+             const availW = w - 40;
+             const availH = h - 40;
+             const scaleFinal = Math.min(1, availW/500, availH/600);
+             pauseUI.setScale(scaleFinal);
+        }
 
         // Update UI Centers and Scaling for Compendium
         if (typeof compendiumUI !== 'undefined' && compendiumUI) {
