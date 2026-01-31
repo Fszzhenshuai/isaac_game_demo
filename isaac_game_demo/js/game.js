@@ -1,8 +1,14 @@
-// Game Configuration
+// Scaling Logic for Wide Screens
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 600,
+    scale: {
+        mode: isMobile ? Phaser.Scale.RESIZE : Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: isMobile ? window.innerWidth : 800,
+        height: isMobile ? window.innerHeight : 600
+    },
     parent: 'game-container',
     backgroundColor: '#333',
     pixelArt: true,
@@ -12,10 +18,6 @@ const config = {
             gravity: { y: 0 },
             debug: false
         }
-    },
-    scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
     },
     scene: {
         preload: preload,
@@ -943,6 +945,24 @@ function create() {
     // Background
     scene.backgroundSprite = this.add.tileSprite(400, 300, 800, 600, 'floor').setDepth(-10);
 
+    // --- Camera Centering for RESIZE mode ---
+    this.scale.on('resize', (gameSize) => {
+        // Keep the camera centered on the 800x600 play area
+        // The play area center is 400, 300
+        const width = gameSize.width;
+        const height = gameSize.height;
+        
+        this.cameras.main.setScroll(
+            400 - width / 2, 
+            300 - height / 2
+        );
+    });
+    // Trigger once initially
+    const initWidth = this.scale.width;
+    const initHeight = this.scale.height;
+    this.cameras.main.setScroll(400 - initWidth/2, 300 - initHeight/2);
+    // ----------------------------------------
+
     // Initial Physics Groups
     bullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Image, maxSize: 100 });
     enemyBullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Image, maxSize: 300 });
@@ -1018,7 +1038,7 @@ function startGame(scene, style) {
     
     // Apply initial stats based on class
     if (style === 'sword') {
-        playerStats.damage = 3; // Higher base dmg
+        playerStats.damage = 2; // Higher base dmg
         playerStats.range = 60; // Melee range (for sword hitbox)
         playerStats.fireRate = 500; // Slower swing
         playerStats.maxHp = 4; // Tankier
@@ -1157,6 +1177,19 @@ function startGame(scene, style) {
     } catch(e) {
         console.error("Touch setup failed:", e);
     }
+
+    // Responsive Camera Logic: Center the 800x600 playspace
+    const centerCamera = () => {
+        if (scene.cameras && scene.cameras.main) {
+            scene.cameras.main.centerOn(400, 300);
+        }
+    };
+    centerCamera();
+    scene.scale.on('resize', (gameSize) => {
+        scene.cameras.main.setViewport(0, 0, gameSize.width, gameSize.height);
+        centerCamera();
+        // Ideally we should also reposition UI here, but a reload is safer for now.
+    });
 
     gameStarted = true;
     console.log("Game successfully started.");
@@ -4435,8 +4468,11 @@ function setupTouchControls() {
     if (!isMobile) return;
 
     // --- 1. Left Visual Joystick ---
+    // Position dynamically based on screen height
+    const joyX = 120;
+    const joyY = this.scale.height - 120; // Bottom Left
+    
     // Background Disk
-    const joyX = 120, joyY = 480;
     const joyBase = this.add.circle(joyX, joyY, 60, 0x333333, 0.5)
         .setScrollFactor(0).setDepth(210).setInteractive();
     
@@ -4449,7 +4485,7 @@ function setupTouchControls() {
     leftStick.baseX = joyX;
     leftStick.baseY = joyY;
     
-    this.input.addPointer(2); // Ensure multi-touch
+    this.input.addPointer(4); // Ensure multi-touch
 
     joyBase.on('pointerdown', (p) => {
         leftStick.active = true;
@@ -4488,39 +4524,41 @@ function setupTouchControls() {
         }
     });
 
-    // --- 2. Right Side Buttons ---
+    // --- 2. Right Side Buttons (Dynamic) ---
+    const btnBaseX = this.scale.width - 100;
+    const btnBaseY = this.scale.height - 120;
     
     // A. Fire Button (Big Red Button) - Bottom Right
-    const btnFire = this.add.circle(700, 480, 50, 0xff0000, 0.4)
+    const btnFire = this.add.circle(btnBaseX, btnBaseY, 50, 0xff0000, 0.4)
         .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(700, 480, "FIRE", { fontSize: '20px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    this.add.text(btnBaseX, btnBaseY, "FIRE", { fontSize: '20px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnFire.on('pointerdown', () => mobileInput.fire = true);
     btnFire.on('pointerup', () => mobileInput.fire = false);
     btnFire.on('pointerout', () => mobileInput.fire = false);
 
     // B. Active Item (E) - Above Fire
-    const btnActive = this.add.circle(620, 480 - 65, 30, 0x00ff00, 0.4)
+    const btnActive = this.add.circle(btnBaseX - 80, btnBaseY - 65, 30, 0x00ff00, 0.4)
         .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(620, 480 - 65, "USE", { fontSize: '14px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    this.add.text(btnBaseX - 80, btnBaseY - 65, "USE", { fontSize: '14px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnActive.on('pointerdown', () => {
         useActiveItem(this);
     });
 
     // D. Dash (Space) - Left of Fire
-    const btnDash = this.add.circle(700 - 85, 480, 40, 0x00aaff, 0.4)
+    const btnDash = this.add.circle(btnBaseX - 85, btnBaseY, 40, 0x00aaff, 0.4)
         .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(700 - 85, 480, "ROLL", { fontSize: '18px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    this.add.text(btnBaseX - 85, btnBaseY, "ROLL", { fontSize: '18px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnDash.on('pointerdown', () => mobileInput.dash = true);
     btnDash.on('pointerup', () => mobileInput.dash = false);
     btnDash.on('pointerout', () => mobileInput.dash = false);
 
     // C. Return/Pause (Esc) - Top Right
-    const btnPause = this.add.rectangle(760, 40, 60, 40, 0x444444, 0.8)
+    const btnPause = this.add.rectangle(this.scale.width - 40, 40, 60, 40, 0x444444, 0.8)
         .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(760, 40, "||", { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    this.add.text(this.scale.width - 40, 40, "||", { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnPause.on('pointerdown', () => {
         togglePause(this);
@@ -4535,18 +4573,23 @@ function setupTouchControls() {
         if (this.scale.isFullscreen) {
             this.scale.stopFullscreen();
         } else {
-             // Force attempt on canvas first
-             const canvas = this.sys.canvas;
-             if (canvas.requestFullscreen) canvas.requestFullscreen();
-             else if (canvas.webkitRequestFullscreen) canvas.webkitRequestFullscreen(); // Safari
-             else this.scale.startFullscreen(); // Phaser fallback
+             // Use Phaser's built-in manager which handles input scaling correctly
+             this.scale.startFullscreen();
         }
     };
+    
+    // Safety: Increase pointer count for multi-touch (Move + Fire + Roll + Pause...)
+    this.input.addPointer(4); 
+    
+    // Fix Input Scaling when entering fullscreen
+    this.scale.on('enterfullscreen', () => {
+        // Give the browser a moment to settle dimensions
+        this.time.delayedCall(100, () => {
+            this.scale.refresh(); 
+        });
+    });
 
     btnFull.on('pointerdown', toggleFullScreen);
-    // Bind to a click event on the DOM element if possible? 
-    // Usually 'pointerdown' is enough in Phaser 3.60+ for Android. 
-    // iOS Safari does NOT show fullscreen via API for elements, only Video. It will likely fail silently.
 
 
 }
@@ -4555,7 +4598,9 @@ function drawMinimap() {
     if (!minimapGraphics) return;
     minimapGraphics.clear();
     const cellSize = 18; 
-    const startX = 650; 
+    // Dynamic Anchor: Top-Right
+    const sceneWidth = minimapGraphics.scene.scale.width;
+    const startX = sceneWidth - 150; 
     const startY = 40; 
     
     // Background
