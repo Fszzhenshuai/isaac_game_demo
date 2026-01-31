@@ -4469,8 +4469,9 @@ function setupTouchControls() {
 
     // --- 1. Left Visual Joystick ---
     // Position dynamically based on screen height
-    const joyX = 120;
-    const joyY = this.scale.height - 120; // Bottom Left
+    // Lowered offset to be closer to bottom edge (80px instead of 120px)
+    let joyX = 120;
+    let joyY = this.scale.height - 80; 
     
     // Background Disk
     const joyBase = this.add.circle(joyX, joyY, 60, 0x333333, 0.5)
@@ -4525,13 +4526,17 @@ function setupTouchControls() {
     });
 
     // --- 2. Right Side Buttons (Dynamic) ---
-    const btnBaseX = this.scale.width - 100;
-    const btnBaseY = this.scale.height - 120;
+    // Moved buttons closer to corner (Lower Y, More Right)
+    let btnBaseX = this.scale.width - 80;
+    let btnBaseY = this.scale.height - 80;
     
+    // UI Group for easier updates
+    this.mobileUI = {};
+
     // A. Fire Button (Big Red Button) - Bottom Right
     const btnFire = this.add.circle(btnBaseX, btnBaseY, 50, 0xff0000, 0.4)
         .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(btnBaseX, btnBaseY, "FIRE", { fontSize: '20px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    const txtFire = this.add.text(btnBaseX, btnBaseY, "FIRE", { fontSize: '20px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnFire.on('pointerdown', () => mobileInput.fire = true);
     btnFire.on('pointerup', () => mobileInput.fire = false);
@@ -4540,7 +4545,7 @@ function setupTouchControls() {
     // B. Active Item (E) - Above Fire
     const btnActive = this.add.circle(btnBaseX - 80, btnBaseY - 65, 30, 0x00ff00, 0.4)
         .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(btnBaseX - 80, btnBaseY - 65, "USE", { fontSize: '14px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    const txtActive = this.add.text(btnBaseX - 80, btnBaseY - 65, "USE", { fontSize: '14px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnActive.on('pointerdown', () => {
         useActiveItem(this);
@@ -4549,7 +4554,7 @@ function setupTouchControls() {
     // D. Dash (Space) - Left of Fire
     const btnDash = this.add.circle(btnBaseX - 85, btnBaseY, 40, 0x00aaff, 0.4)
         .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(btnBaseX - 85, btnBaseY, "ROLL", { fontSize: '18px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    const txtDash = this.add.text(btnBaseX - 85, btnBaseY, "ROLL", { fontSize: '18px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnDash.on('pointerdown', () => mobileInput.dash = true);
     btnDash.on('pointerup', () => mobileInput.dash = false);
@@ -4558,7 +4563,7 @@ function setupTouchControls() {
     // C. Return/Pause (Esc) - Top Right
     const btnPause = this.add.rectangle(this.scale.width - 40, 40, 60, 40, 0x444444, 0.8)
         .setScrollFactor(0).setDepth(210).setInteractive();
-    this.add.text(this.scale.width - 40, 40, "||", { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
+    const txtPause = this.add.text(this.scale.width - 40, 40, "||", { fontSize: '24px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnPause.on('pointerdown', () => {
         togglePause(this);
@@ -4589,6 +4594,39 @@ function setupTouchControls() {
         });
     });
 
+    // --- Dynamic Resizing for UI ---
+    this.scale.on('resize', (gameSize) => {
+        const w = gameSize.width;
+        const h = gameSize.height;
+        
+        // Update Joystick
+        joyY = h - 80;
+        joyX = 120;
+        joyBase.setPosition(joyX, joyY);
+        joyKnob.setPosition(joyX, joyY);
+        leftStick.baseX = joyX;
+        leftStick.baseY = joyY;
+
+        // Update Buttons
+        btnBaseX = w - 80;
+        btnBaseY = h - 80;
+        
+        btnFire.setPosition(btnBaseX, btnBaseY);
+        txtFire.setPosition(btnBaseX, btnBaseY);
+        
+        btnActive.setPosition(btnBaseX - 80, btnBaseY - 65);
+        txtActive.setPosition(btnBaseX - 80, btnBaseY - 65);
+        
+        btnDash.setPosition(btnBaseX - 85, btnBaseY);
+        txtDash.setPosition(btnBaseX - 85, btnBaseY);
+        
+        btnPause.setPosition(w - 40, 40);
+        txtPause.setPosition(w - 40, 40);
+        
+        // Recenter Camera just in case
+        this.cameras.main.setScroll(400 - w / 2, 300 - h / 2);
+    });
+    
     btnFull.on('pointerdown', toggleFullScreen);
 
 
