@@ -3970,13 +3970,74 @@ function createUIContainers(scene) {
     pauseUI.add(createLargeBtn("重新开始", 330, () => location.reload()));
 }
 
-function closeAllMenus() {
+function gameOver(scene) {
+    if (isGameOver) return;
+    isGameOver = true;
+    if (player) player.setTint(0x000000);
+    scene.physics.pause();
+    
+    // Auto Shutdown Controls
+    disableMobileControls(scene);
+
+    // Use a High Depth Container to ensure it's on top of EVERYTHING
+    let gameOverUI = scene.add.container(400, 300).setScrollFactor(0).setDepth(4000);
+    
+    // Add semi-transparent black background
+    const bg = scene.add.rectangle(0, 0, 4000, 4000, 0x000000, 0.7);
+    bg.setInteractive(); // Block other inputs
+    gameOverUI.add(bg);
+
+    const t1 = scene.add.text(0, 0, "你已死亡", { fontSize: '64px', color: '#ff0000', stroke: '#000', strokeThickness: 6, align: 'center' }).setOrigin(0.5);
+    
+    gameOverUI.add(t1);
+    
+    // Auto Restart logic
+    scene.time.delayedCall(3000, () => {
+         // Reload page to return to "Character Selection" (Start)
+         window.location.reload();
+    });
+}
+
+// Logic to disable/enable mobile controls
+function disableMobileControls(scene) {
+    // Find objects by name or reference? We don't have global refs easily unless we attach to scene
+    // In setupTouchControls, we didn't attach to scene properties like scene.joyBase
+    // We need to modify setupTouchControls to attach them.
+    // OR we iterate children.
+    // Better: let's modify setupTouchControls to store refs on scene.
+    
+    if (scene.joyBase && scene.joyBase.input && scene.joyBase.input.enabled) scene.joyBase.disableInteractive();
+    if (scene.btnFire && scene.btnFire.input && scene.btnFire.input.enabled) scene.btnFire.disableInteractive();
+    if (scene.btnActive && scene.btnActive.input && scene.btnActive.input.enabled) scene.btnActive.disableInteractive();
+    if (scene.btnDash && scene.btnDash.input && scene.btnDash.input.enabled) scene.btnDash.disableInteractive();
+    if (scene.btnFull && scene.btnFull.input && scene.btnFull.input.enabled) scene.btnFull.disableInteractive();
+}
+
+function enableMobileControls(scene) {
+    // Re-enable
+    if (scene.joyBase) scene.joyBase.setInteractive();
+    if (scene.btnFire) scene.btnFire.setInteractive();
+    if (scene.btnActive) scene.btnActive.setInteractive();
+    if (scene.btnDash) scene.btnDash.setInteractive();
+    if (scene.btnFull) scene.btnFull.setInteractive();
+}
+
+function closeAllMenus(scene) { // Added scene param or use global if available (DANGEROUS)
+    // We need to pass scene to closeAllMenus to find controls
+    // But closeAllMenus usage above doesn't pass scene.
+    // Let's rely on globals if possible or update calls.
+    // Actually, 'inventoryUI', 'statsUI', 'isPaused' are global vars in this file scope.
     if (inventoryUI) inventoryUI.setVisible(false);
     if (statsUI) statsUI.setVisible(false);
     if (helpUI) helpUI.setVisible(false);
     if (compendiumUI) compendiumUI.setVisible(false);
     if (pauseUI) pauseUI.setVisible(false);
+    
     isPaused = false;
+    
+    // Resume controls (We need scene reference here...)
+    // This function is called without scene usually.
+    // Let's update the calls to closeAllMenus.
 }
 
 function toggleInventory(scene) {
@@ -4087,15 +4148,30 @@ function toggleStats(scene) {
 
 function togglePause(scene) {
     let wasVisible = pauseUI.visible;
-    closeAllMenus(); // Close others
+    
+    // Pass scene to close menus
+    if (inventoryUI) inventoryUI.setVisible(false);
+    if (statsUI) statsUI.setVisible(false);
+    if (helpUI) helpUI.setVisible(false);
+    if (compendiumUI) compendiumUI.setVisible(false);
+    if (pauseUI) pauseUI.setVisible(false);
+    isPaused = false;
+    
     if (!wasVisible) {
         pauseUI.setVisible(true);
         isPaused = true;
         scene.physics.pause();
         if (SoundSystem.ctx && SoundSystem.ctx.state === 'running') SoundSystem.ctx.suspend();
+        
+        // DISABLE MOBILE CONTROLS
+        disableMobileControls(scene);
+        
     } else {
         scene.physics.resume();
         if (SoundSystem.ctx && SoundSystem.ctx.state === 'suspended') SoundSystem.ctx.resume();
+        
+        // ENABLE MOBILE CONTROLS
+        enableMobileControls(scene);
     }
 }
 
@@ -4701,6 +4777,8 @@ function setupTouchControls() {
     // Background Disk
     const joyBase = this.add.circle(joyX, joyY, 60, 0x333333, 0.5)
         .setScrollFactor(0).setDepth(210).setInteractive();
+        
+    this.joyBase = joyBase;
     
     // Knob
     const joyKnob = this.add.circle(joyX, joyY, 30, 0x888888, 0.8)
@@ -4770,6 +4848,8 @@ function setupTouchControls() {
         .setScrollFactor(0).setDepth(210).setInteractive(); // Radius 50, so bottom is height-10
     const txtFire = this.add.text(btnBaseX, btnBaseY, "FIRE", { fontSize: '20px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
+    this.btnFire = btnFire;
+
     btnFire.on('pointerdown', () => mobileInput.fire = true);
     btnFire.on('pointerup', () => mobileInput.fire = false);
     btnFire.on('pointerout', () => mobileInput.fire = false);
@@ -4779,6 +4859,8 @@ function setupTouchControls() {
         .setScrollFactor(0).setDepth(210).setInteractive();
     const txtActive = this.add.text(btnBaseX - 80, btnBaseY - 65, "USE", { fontSize: '14px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
+    this.btnActive = btnActive;
+
     btnActive.on('pointerdown', () => {
         useActiveItem(this);
     });
@@ -4787,7 +4869,9 @@ function setupTouchControls() {
     const btnDash = this.add.circle(btnBaseX - 85, btnBaseY, 40, 0x00aaff, 0.4)
         .setScrollFactor(0).setDepth(210).setInteractive();
     const txtDash = this.add.text(btnBaseX - 85, btnBaseY, "ROLL", { fontSize: '18px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
-    
+
+    this.btnDash = btnDash;
+
     btnDash.on('pointerdown', () => mobileInput.dash = true);
     btnDash.on('pointerup', () => mobileInput.dash = false);
     btnDash.on('pointerout', () => mobileInput.dash = false);
@@ -4810,6 +4894,8 @@ function setupTouchControls() {
         .setScrollFactor(0).setDepth(2000).setInteractive(); // Depth boosted
     this.add.text(40, 40, "[ ]", { fontSize: '20px' }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
     
+    this.btnFull = btnFull;
+
     const toggleFullScreen = () => {
         if (this.scale.isFullscreen) {
             this.scale.stopFullscreen();
