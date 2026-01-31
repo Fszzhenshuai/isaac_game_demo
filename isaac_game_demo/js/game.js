@@ -2605,19 +2605,19 @@ const enemyStats = {
     'shopkeeper_angry': { name: '店主', hp: 80, damage: 2, speed: 180, texture: 'enemy_chaser', color: 0xeeeeee, desc: '你激怒了他。' },
 
     // Bosses - HP Buffed (~1.5x)
-    'boss': { name: '巨型史莱姆', hp: 80, damage: 1, speed: 50, desc: 'Boss. 体型巨大，拥有大量生命值。', isBoss: true },
-    'boss_slime': { name: '史莱姆王', hp: 70, damage: 1, speed: 65, desc: 'Boss. 分裂出小史莱姆。', isBoss: true },
-    'boss_monstro': { name: '孟斯特罗', hp: 90, damage: 1, speed: 100, texture: 'boss', color: 0xccaa88, desc: 'Boss. 巨大的肉块，会跳跃攻击。', isBoss: true },
-    'boss_duke': { name: '苍蝇公爵', hp: 70, damage: 1, speed: 35, texture: 'boss', color: 0x222222, desc: 'Boss. 召唤苍蝇护体。', isBoss: true },
+    'boss': { name: '巨型史莱姆', hp: 80, damage: 1, speed: 40, desc: 'Boss. 体型巨大，拥有大量生命值。', isBoss: true }, // Reduced Speed 50->40
+    'boss_slime': { name: '史莱姆王', hp: 70, damage: 1, speed: 50, desc: 'Boss. 分裂出小史莱姆。', isBoss: true }, // 65->50
+    'boss_monstro': { name: '孟斯特罗', hp: 90, damage: 1, speed: 55, texture: 'boss', color: 0xccaa88, desc: 'Boss. 巨大的肉块，会跳跃攻击。', isBoss: true }, // 100->55 Massive Nerf
+    'boss_duke': { name: '苍蝇公爵', hp: 70, damage: 1, speed: 30, texture: 'boss', color: 0x222222, desc: 'Boss. 召唤苍蝇护体。', isBoss: true }, // 35->30
     
-    'boss_golem': { name: '岩石巨像', hp: 100, damage: 1, speed: 35, desc: 'Boss. 极其缓慢但防御极高，发射岩石弹幕。', isBoss: true },
-    'boss_peep': { name: '皮普', hp: 110, damage: 1, speed: 80, texture: 'boss_golem', color: 0xffffaa, desc: 'Boss. 踩踏地板并在死亡时留下眼球。', isBoss: true },
+    'boss_golem': { name: '岩石巨像', hp: 100, damage: 1, speed: 30, desc: 'Boss. 极其缓慢但防御极高，发射岩石弹幕。', isBoss: true },
+    'boss_peep': { name: '皮普', hp: 110, damage: 1, speed: 60, texture: 'boss_golem', color: 0xffffaa, desc: 'Boss. 踩踏地板并在死亡时留下眼球。', isBoss: true }, // 80->60
     
     'boss_eye': { name: '妈妈的眼睛', hp: 120, damage: 1, speed: 0, texture: 'boss_golem', color: 0xffcccc, desc: 'Boss. 固定在墙上发射激光。', isBoss: true },
-    'boss_skeletor': { name: '骷髅王', hp: 100, damage: 1, speed: 90, texture: 'boss_golem', color: 0xdddddd, desc: 'Boss. 骨头弹幕。', isBoss: true },
+    'boss_skeletor': { name: '骷髅王', hp: 100, damage: 1, speed: 60, texture: 'boss_golem', color: 0xdddddd, desc: 'Boss. 骨头弹幕。', isBoss: true }, // 90->60
 
-    'boss_widow': { name: '黑寡妇', hp: 130, damage: 1, speed: 110, texture: 'boss_golem', color: 0x111111, desc: 'Boss. 快速跳跃并召唤蜘蛛。', isBoss: true },
-    'boss_haunt': { name: '猎杀者', hp: 120, damage: 1, speed: 70, texture: 'boss', color: 0xccffff, desc: 'Boss. 无敌状态切换，幽灵随从。', isBoss: true },
+    'boss_widow': { name: '黑寡妇', hp: 130, damage: 1, speed: 70, texture: 'boss_golem', color: 0x111111, desc: 'Boss. 快速跳跃并召唤蜘蛛。', isBoss: true }, // 110->70
+    'boss_haunt': { name: '猎杀者', hp: 120, damage: 1, speed: 50, texture: 'boss', color: 0xccffff, desc: 'Boss. 无敌状态切换，幽灵随从。', isBoss: true }, // 70->50
     'boss_pin': { name: '大岩虫', hp: 100, damage: 1, speed: 90, texture: 'boss_golem', color: 0xaaffaa, desc: 'Boss. 从地底钻出突袭。', isBoss: true },
     'boss_scolex': { name: '斯科莱克斯', hp: 140, damage: 1, speed: 90, texture: 'boss_golem', color: 0x222255, desc: 'Boss. 只露出尾巴弱点。', isBoss: true },
     'boss_krampus': { name: '坎普斯', hp: 150, damage: 2, speed: 90, texture: 'boss', color: 0x550000, desc: 'Boss. 十字硫磺火。', isBoss: true },
@@ -3447,9 +3447,25 @@ function gameOver(scene) {
     isGameOver = true;
     if (player) player.setTint(0x000000);
     scene.physics.pause();
-    scene.add.text(200, 250, "游戏结束", { fontSize: '64px', color: '#ff0000', stroke: '#000', strokeThickness: 6 }).setDepth(200);
-    scene.add.text(250, 350, "点击重试", { fontSize: '32px', color: '#fff' }).setDepth(200)
-        .setInteractive().on('pointerdown', () => location.reload());
+    
+    // UI Layer is scrollFactor(0), so these will stay on screen
+    // Add semi-transparent black background
+    const bg = scene.add.rectangle(400, 300, 2000, 2000, 0x000000, 0.7);
+    uiLayer.add(bg);
+
+    const t1 = scene.add.text(400, 250, "游戏结束", { fontSize: '64px', color: '#ff0000', stroke: '#000', strokeThickness: 6, align: 'center' }).setOrigin(0.5);
+    const t2 = scene.add.text(400, 350, "点击重试", { fontSize: '32px', color: '#fff', align: 'center' }).setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+        
+    t2.on('pointerdown', () => {
+        console.log("Restarting game...");
+        window.location.reload(); 
+    });
+    
+    // Ensure input works even when paused (Phaser 3 default behavior allows UI input during pause, but just in case)
+    scene.input.topOnly = true; 
+
+    uiLayer.add([t1, t2]);
 }
 
 function pickItem(player, item) {
@@ -3817,10 +3833,14 @@ function createUIContainers(scene) {
     pauseUI = scene.add.container(400, 300).setScrollFactor(0);
     pauseUI.setDepth(250);
     pauseUI.setVisible(false);
+    
+    // Large Background to cover any screen size
     const pbg = scene.add.graphics();
-    pbg.fillStyle(0x000000, 0.8);
-    pbg.fillRect(-400, -300, 800, 600);
+    pbg.fillStyle(0x000000, 0.85);
+    // Huge rectangle centered at 0,0 of container
+    pbg.fillRect(-2000, -2000, 4000, 4000); 
     pauseUI.add(pbg);
+    
     pauseUI.add(scene.add.text(0, -250, "暂停中", { fontSize: '64px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
     
     // Resume
