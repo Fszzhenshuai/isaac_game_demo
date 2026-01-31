@@ -3574,7 +3574,7 @@ function createUIContainers(scene) {
     inventoryUI.scrollHandle = scene.add.rectangle(280, -150, 10, 50, 0xaaaaaa);
     inventoryUI.add(inventoryUI.scrollHandle);
     
-    // Input for scrolling (Unified: Wheel + Touch)
+    // Input for scrolling (Unified: Wheel + Touch + Interactive Background)
     const handleScroll = (deltaY) => {
         if (inventoryUI.visible) {
             inventoryUI.scrollContainer.y -= deltaY;
@@ -3620,24 +3620,39 @@ function createUIContainers(scene) {
         handleScroll(deltaY * 0.5);
     });
 
-    // Touch Drag Scrolling
-    let isDraggingUI = false;
-    let lastDragY = 0;
-    scene.input.on('pointerdown', (pointer) => {
-        if (inventoryUI.visible || compendiumUI.visible) {
-            isDraggingUI = true;
-            lastDragY = pointer.y;
-        }
-    });
+    // Touch Drag Scrolling - Improved
+    let scrollDragId = null;
+    let scrollLastY = 0;
+    
+    // Attach listener to Scene Input but enable background blocking
+    // Make UI backgrounds interactive to block game input and catch drags reliably
+    bg.setInteractive(new Phaser.Geom.Rectangle(-300, -200, 600, 400), Phaser.Geom.Rectangle.Contains); // Inventory BG
+    cbg.setInteractive(new Phaser.Geom.Rectangle(-350, -250, 700, 500), Phaser.Geom.Rectangle.Contains); // Compendium BG
+    
+    // Generic drag handler for UI backgrounds
+    const onUIDown = (pointer) => {
+        scrollDragId = pointer.id;
+        scrollLastY = pointer.y;
+    };
+    bg.on('pointerdown', onUIDown);
+    cbg.on('pointerdown', onUIDown);
+
     scene.input.on('pointermove', (pointer) => {
-        if (isDraggingUI && (inventoryUI.visible || compendiumUI.visible)) {
-            const dy = (lastDragY - pointer.y);
-            handleScroll(dy);
-            lastDragY = pointer.y;
+        if (scrollDragId !== null && pointer.id === scrollDragId && (inventoryUI.visible || compendiumUI.visible)) {
+             const dy = (scrollLastY - pointer.y) * 1.5; // Multiplier for faster scroll
+             handleScroll(dy);
+             scrollLastY = pointer.y;
         }
     });
-    scene.input.on('pointerup', () => { isDraggingUI = false; });
-    scene.input.on('pointerout', () => { isDraggingUI = false; });
+
+    const onUIUp = (pointer) => {
+        if (pointer.id === scrollDragId) {
+            scrollDragId = null;
+        }
+    };
+    scene.input.on('pointerup', onUIUp);
+    scene.input.on('pointerout', onUIUp); // Should NOT use this if dragging outside canvas but staying held, but for now ok
+
 
     // UI: Help
     helpUI = scene.add.container(400, 300).setScrollFactor(0);
@@ -4511,18 +4526,28 @@ function setupTouchControls() {
         togglePause(this);
     });
 
-    // E. Fullscreen (Top Left)
+    // E. Fullscreen (Top Left) - Improved Logic
     const btnFull = this.add.rectangle(40, 40, 50, 40, 0x222222, 0.8)
         .setScrollFactor(0).setDepth(210).setInteractive();
     this.add.text(40, 40, "[ ]", { fontSize: '20px' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
-    btnFull.on('pointerdown', () => {
+    const toggleFullScreen = () => {
         if (this.scale.isFullscreen) {
             this.scale.stopFullscreen();
         } else {
-            this.scale.startFullscreen();
+             // Force attempt on canvas first
+             const canvas = this.sys.canvas;
+             if (canvas.requestFullscreen) canvas.requestFullscreen();
+             else if (canvas.webkitRequestFullscreen) canvas.webkitRequestFullscreen(); // Safari
+             else this.scale.startFullscreen(); // Phaser fallback
         }
-    });
+    };
+
+    btnFull.on('pointerdown', toggleFullScreen);
+    // Bind to a click event on the DOM element if possible? 
+    // Usually 'pointerdown' is enough in Phaser 3.60+ for Android. 
+    // iOS Safari does NOT show fullscreen via API for elements, only Video. It will likely fail silently.
+
 
 }
 
