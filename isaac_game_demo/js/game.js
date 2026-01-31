@@ -1059,6 +1059,10 @@ function startGame(scene, style) {
         player.sword.setDepth(11);
     }
 
+    // --- Camera Follow ---
+    // Critical for mobile RESIZE mode: Always keep player in center
+    scene.cameras.main.startFollow(player, true, 0.1, 0.1);
+
     // Colliders
     scene.physics.add.overlap(bullets, enemies, hitEnemy, null, scene);
     scene.physics.add.collider(player, enemies, hitPlayer, null, scene);
@@ -3543,9 +3547,15 @@ function createUIContainers(scene) {
     compendiumUI.setDepth(200);
     compendiumUI.setVisible(false);
     
-    // Scale down if screen is small (mobile landscape)
+    // Smart Scaling for small screens
     let compScale = 1;
-    if (scene.scale.height < 550) compScale = 0.7;
+    // Fit 700x500 into screen with padding
+    const safeW = scene.scale.width * 0.9;
+    const safeH = scene.scale.height * 0.9;
+    const scaleX = safeW / 700;
+    const scaleY = safeH / 500;
+    compScale = Math.min(1, scaleX, scaleY); // Never scale up, only down
+    
     compendiumUI.setScale(compScale);
 
     const cbg = scene.add.graphics();
@@ -4505,24 +4515,23 @@ function setupTouchControls() {
     joyBase.on('pointerdown', (p) => {
         leftStick.active = true;
         leftStick.pointerId = p.id;
-        // USE SCREEN COORDINATES for initial press to avoid jump
-        // But logic needs relative diff. 
-        // p.position is Screen Space
-        // joyX/joyY is Screen Space
-        // We set leftStick.x/y to mimic logic but using Screen Coords?
-        // Actually, let's just use Screen Coords for the entire joystick logic
-        leftStick.x = p.position.x; 
-        leftStick.y = p.position.y;
+        // CORRECT COORDINATE MAPPING
+        // Convert World Point (p.x, p.y) back to Screen Point for UI logic
+        let px = p.x - this.cameras.main.scrollX;
+        let py = p.y - this.cameras.main.scrollY;
+        
+        leftStick.x = px; 
+        leftStick.y = py;
     });
     
     // Global move handling is better for stick dragging outside base
     this.input.on('pointermove', (p) => {
         if (leftStick.active && p.id === leftStick.pointerId) {
-            // Use SCREEN coordinates
-            let px = p.position.x;
-            let py = p.position.y;
+            // Convert World Point to Screen Point
+            let px = p.x - this.cameras.main.scrollX;
+            let py = p.y - this.cameras.main.scrollY;
             
-            // Clamp distance visually
+            // Clamp distance visually (in Screen Space)
             let dist = Phaser.Math.Distance.Between(joyX, joyY, px, py);
             let angle = Phaser.Math.Angle.Between(joyX, joyY, px, py);
             if (dist > 60) dist = 60;
@@ -4531,18 +4540,12 @@ function setupTouchControls() {
             joyKnob.x = joyX + Math.cos(angle) * dist;
             joyKnob.y = joyY + Math.sin(angle) * dist;
             
-            // Update logic inputs
-            // Map the screen-space joystick delta to the physics logic
-            // The physics logic expects leftStick.x/y to be raw pointer values, 
-            // and compares them to leftStick.baseX/Y (which are joyX/joyY).
-            // So if we set leftStick.x = px (Screen), and leftStick.baseX = joyX (Screen),
-            // The delta (px - joyX) is correct.
+            // Update logic inputs (Pass Screen Coords to logic)
+            // The Update loop logic for dash/velocity MUST know these are 
+            // relative to the joystick base on SCREEN.
+            // Since `leftStick.baseX` is set to `joyX` (Screen), comparing `leftStick.x` (Screen) works.
             leftStick.x = px; 
             leftStick.y = py;
-            
-            // Hack to keep baseX static
-            leftStick.baseX = joyX;
-            leftStick.baseY = joyY;
         }
     });
 
