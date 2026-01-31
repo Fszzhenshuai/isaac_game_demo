@@ -1061,9 +1061,24 @@ function startGame(scene, style) {
 
     // --- Camera Follow ---
     // Critical for mobile RESIZE mode: Always keep player in center
-    scene.cameras.main.startFollow(player, true, 0.1, 0.1);
+    // Lerp of 0.1 is smooth but can cause visual shudder if player hits wall repeatedly at high speed
+    // Use slightly stiffer lerp (0.2) or roundPixels logic to reduce aliasing jitter
+    // Also, setting camera bounds helps avoid 'void' if map is small, but our map is 800x600 fixed?
+    scene.cameras.main.startFollow(player, true, 0.2, 0.2);
+    // Add small deadzone to prevent micro-adjustments when standing still
+    scene.cameras.main.setDeadzone(10, 10);
 
-    // Colliders
+    // Set Physics Body Size more carefully to avoid 'corner catching'
+    // Rounded body or slightly smaller box helps slide along walls
+    player.body.setSize(20, 20); 
+    player.body.setOffset(10, 16); // Center the 20x20 box in the 40x40 frame approx
+    
+    // Explicitly set World Bounds to prevent escaping
+    scene.physics.world.setBounds(0, 0, 800, 600);
+    // Camera Bounds: Ensure camera doesn't show too much emptiness if screen is huge?
+    // Actually, showing void is better than hard stop for mobile consistency.
+    // But setting bounds matching physics helps 'feel' the room edge.
+    // scene.cameras.main.setBounds(0, 0, 800, 600); // User might prefer seeing center even if edge is void. Let's keep unbound camera for now, but strict physics.
     scene.physics.add.overlap(bullets, enemies, hitEnemy, null, scene);
     scene.physics.add.collider(player, enemies, hitPlayer, null, scene);
     scene.physics.add.overlap(player, enemyBullets, hitPlayer, null, scene);
@@ -4055,6 +4070,49 @@ function drawCompendium(scene) {
     });
     
     compendiumUI.contentContainer.height = y;
+    
+    // Reset scroll when refreshing list
+    compendiumUI.contentContainer.y = -180;
+    
+    // Enable Interaction on ScrollBar Handle
+    if (compendiumUI.scrollHandle) {
+        compendiumUI.scrollHandle.setInteractive({ draggable: true });
+        // Handle logic handled by global pointermove, but specific draggable helps
+        scene.input.setDraggable(compendiumUI.scrollHandle);
+        compendiumUI.scrollHandle.on('drag', (pointer, dragX, dragY) => {
+            // Drag Y is relative to container or screen? 
+            // In setScrollFactor(0) container, it's screen-like?
+            // Actually simpler to just map Y diff to Scroll Percent
+            
+            // Bar limit: Y from -180 to -180 + 370 = 190? (Bar is 420px tall)
+            // Handle height 50. Range is roughly 370px.
+            // minHandleY = -180. maxHandleY = -180 + (420 - 50) = 190.
+            
+            // dragY is local to container if handle is in container?
+            // Yes.
+            
+            let minY = -180;
+            let maxY = 190;
+            let cy = Phaser.Math.Clamp(dragY, minY, maxY);
+            
+            compendiumUI.scrollHandle.y = cy;
+            
+            // Update Content
+            let pct = (cy - minY) / (maxY - minY);
+            // Content Y range:
+            // contentHeight = compendiumUI.contentContainer.height;
+            // viewHeight = 420;
+            // minContentY = -180 - (contentHeight - viewHeight);
+            // maxContentY = -180;
+            
+            const contentHeight = compendiumUI.contentContainer.height || 100;
+            const viewHeight = 420;
+            if (contentHeight > viewHeight) {
+                const range = contentHeight - viewHeight;
+                compendiumUI.contentContainer.y = -180 - (pct * range);
+            }
+        });
+    }
 }
 
 
