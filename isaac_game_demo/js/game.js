@@ -3689,16 +3689,17 @@ function createUIContainers(scene) {
     // Generic drag handler for UI backgrounds
     const onUIDown = (pointer) => {
         scrollDragId = pointer.id;
-        scrollLastY = pointer.y;
+        scrollLastY = pointer.position.y; // Use Screen Y
     };
     bg.on('pointerdown', onUIDown);
     cbg.on('pointerdown', onUIDown);
 
     scene.input.on('pointermove', (pointer) => {
         if (scrollDragId !== null && pointer.id === scrollDragId && (inventoryUI.visible || compendiumUI.visible)) {
-             const dy = (scrollLastY - pointer.y) * 1.5; // Multiplier for faster scroll
+             const py = pointer.position.y; // Use Screen Y
+             const dy = (scrollLastY - py) * 1.5; // Multiplier for faster scroll
              handleScroll(dy);
-             scrollLastY = pointer.y;
+             scrollLastY = py;
         }
     });
 
@@ -4515,10 +4516,10 @@ function setupTouchControls() {
     joyBase.on('pointerdown', (p) => {
         leftStick.active = true;
         leftStick.pointerId = p.id;
-        // CORRECT COORDINATE MAPPING
-        // Convert World Point (p.x, p.y) back to Screen Point for UI logic
-        let px = p.x - this.cameras.main.scrollX;
-        let py = p.y - this.cameras.main.scrollY;
+        // CORRECT COORDINATE MAPPING (SCREEN SPACE)
+        // Use raw screen position to avoid Camera drift issues
+        let px = p.position.x;
+        let py = p.position.y;
         
         leftStick.x = px; 
         leftStick.y = py;
@@ -4527,9 +4528,9 @@ function setupTouchControls() {
     // Global move handling is better for stick dragging outside base
     this.input.on('pointermove', (p) => {
         if (leftStick.active && p.id === leftStick.pointerId) {
-            // Convert World Point to Screen Point
-            let px = p.x - this.cameras.main.scrollX;
-            let py = p.y - this.cameras.main.scrollY;
+            // Use SCREEN coordinates
+            let px = p.position.x;
+            let py = p.position.y;
             
             // Clamp distance visually (in Screen Space)
             let dist = Phaser.Math.Distance.Between(joyX, joyY, px, py);
@@ -4540,10 +4541,7 @@ function setupTouchControls() {
             joyKnob.x = joyX + Math.cos(angle) * dist;
             joyKnob.y = joyY + Math.sin(angle) * dist;
             
-            // Update logic inputs (Pass Screen Coords to logic)
-            // The Update loop logic for dash/velocity MUST know these are 
-            // relative to the joystick base on SCREEN.
-            // Since `leftStick.baseX` is set to `joyX` (Screen), comparing `leftStick.x` (Screen) works.
+            // Update logic inputs
             leftStick.x = px; 
             leftStick.y = py;
         }
@@ -4695,7 +4693,8 @@ function setupTouchControls() {
                  let rx = cx - 330 * finalScale;
                  let ry = cy - 180 * finalScale;
                  
-                 compendiumUI.maskShape.fillRect(rx, ry, rw, rh);
+                 // Expanded Mask Area by 2px to prevent rounding clip issues
+                 compendiumUI.maskShape.fillRect(rx - 2, ry - 2, rw + 4, rh + 4);
              }
         }
         if (inventoryUI) {
@@ -4715,7 +4714,8 @@ function setupTouchControls() {
                  let rh = 340 * scaleFinal;
                  let rx = cx - 300 * scaleFinal;
                  let ry = cy - 150 * scaleFinal;
-                 inventoryUI.maskShape.fillRect(rx, ry, rw, rh);
+                 // Expanded
+                 inventoryUI.maskShape.fillRect(rx - 2, ry - 2, rw + 4, rh + 4);
              }
         }
         
