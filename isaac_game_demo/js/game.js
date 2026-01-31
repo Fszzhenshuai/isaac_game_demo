@@ -3604,9 +3604,11 @@ function createUIContainers(scene) {
     compendiumUI.add(compendiumUI.contentContainer);
 
     // Compendium Scrollbar
-    const cScrollBg = scene.add.rectangle(330, 30, 10, 420, 0x333333);
+    const cScrollBg = scene.add.rectangle(330, 30, 20, 420, 0x333333); // Wider background
     compendiumUI.add(cScrollBg);
-    compendiumUI.scrollHandle = scene.add.rectangle(330, -180, 10, 50, 0xaaaaaa);
+    // Corrected initial position to be inside the track
+    // Track Top: -180. Handle H: 50. Center Start: -180 + 25 = -155.
+    compendiumUI.scrollHandle = scene.add.rectangle(330, -155, 20, 50, 0xffffff); // Wider, brighter handle
     compendiumUI.add(compendiumUI.scrollHandle);
 
     // UI: Inventory
@@ -3640,11 +3642,31 @@ function createUIContainers(scene) {
     inventoryUI.add(inventoryUI.scrollContainer);
     
     // Scroll bar background
-    const scrollBg = scene.add.rectangle(280, 0, 10, 340, 0x333333);
+    const scrollBg = scene.add.rectangle(280, 0, 20, 340, 0x333333);
     inventoryUI.add(scrollBg);
     // Scroll bar handle
-    inventoryUI.scrollHandle = scene.add.rectangle(280, -150, 10, 50, 0xaaaaaa);
+    // Track Top: -170. Handle H: 50. Center Start: -170 + 25 = -145.
+    inventoryUI.scrollHandle = scene.add.rectangle(280, -145, 20, 50, 0xffffff);
     inventoryUI.add(inventoryUI.scrollHandle);
+
+    // Inventory Scrollbar Interaction
+    inventoryUI.scrollHandle.setInteractive({ draggable: true });
+    scene.input.setDraggable(inventoryUI.scrollHandle);
+    inventoryUI.scrollHandle.on('drag', (pointer, dragX, dragY) => {
+        let minY = -145;
+        let maxY = 145;
+        let cy = Phaser.Math.Clamp(dragY, minY, maxY);
+        inventoryUI.scrollHandle.y = cy;
+        
+        let pct = (cy - minY) / (maxY - minY);
+        
+        const contentHeight = inventoryUI.scrollContainer.height || 100;
+        const viewHeight = 340;
+        if (contentHeight > viewHeight) {
+            const range = contentHeight - viewHeight;
+            inventoryUI.scrollContainer.y = -140 - (pct * range);
+        }
+    });
     
     // Input for scrolling (Unified: Wheel + Touch + Interactive Background)
     const handleScroll = (deltaY) => {
@@ -3664,7 +3686,8 @@ function createUIContainers(scene) {
                 let range = maxY - minY;
                 if (range === 0) range = 1;
                 let pct = (maxY - inventoryUI.scrollContainer.y) / range;
-                inventoryUI.scrollHandle.y = -150 + pct * (340 - 50);
+                // MinY -145, Range 290
+                inventoryUI.scrollHandle.y = -145 + pct * 290;
             }
         } 
         else if (compendiumUI.visible) {
@@ -3683,7 +3706,8 @@ function createUIContainers(scene) {
                 let range = maxY - minY;
                 if (range === 0) range = 1;
                 let pct = (maxY - compendiumUI.contentContainer.y) / range;
-                compendiumUI.scrollHandle.y = -180 + pct * (420 - 50);
+                // MinY -155, Range 370
+                compendiumUI.scrollHandle.y = -155 + pct * 370;
             }
         }
     };
@@ -3877,7 +3901,7 @@ function toggleInventory(scene) {
         
         // Reset scroll
         inventoryUI.scrollContainer.y = -140;
-        inventoryUI.scrollHandle.y = -150;
+        inventoryUI.scrollHandle.y = -145;
         
     } else {
         scene.physics.resume();
@@ -3966,7 +3990,7 @@ function drawCompendium(scene) {
     
     // Reset Scroll
     compendiumUI.contentContainer.y = -180;
-    compendiumUI.scrollHandle.y = -180;
+    compendiumUI.scrollHandle.y = -155;
 
     const safeItems = (collectionData && Array.isArray(collectionData.items)) ? collectionData.items : [];
     const safeEnemies = (collectionData && Array.isArray(collectionData.enemies)) ? collectionData.enemies : [];
@@ -4084,15 +4108,11 @@ function drawCompendium(scene) {
             // In setScrollFactor(0) container, it's screen-like?
             // Actually simpler to just map Y diff to Scroll Percent
             
-            // Bar limit: Y from -180 to -180 + 370 = 190? (Bar is 420px tall)
+            // Bar limit: Y from -155 to -155 + 370 = 215? (Bar is 420px tall)
             // Handle height 50. Range is roughly 370px.
-            // minHandleY = -180. maxHandleY = -180 + (420 - 50) = 190.
             
-            // dragY is local to container if handle is in container?
-            // Yes.
-            
-            let minY = -180;
-            let maxY = 190;
+            let minY = -155;
+            let maxY = 215;
             let cy = Phaser.Math.Clamp(dragY, minY, maxY);
             
             compendiumUI.scrollHandle.y = cy;
@@ -4296,11 +4316,11 @@ function updateUI(scene) {
 }
 
 function updatePlayerHealthUI(scene) {
-    if (!scene.heartGroup) return;
+    if (!scene || !scene.heartGroup) return;
     scene.heartGroup.clear(true, true);
 
-    const startX = 30; // Left margin
-    const startY = 30; // Top margin
+    const startX = 30; 
+    const startY = 30; 
     const spacing = 32;
 
     const fullHearts = Math.floor(playerStats.hp);
@@ -4310,14 +4330,17 @@ function updatePlayerHealthUI(scene) {
         const x = startX + i * spacing;
         const isFull = i < fullHearts;
         
-        // Use text hearts instead of complex graphics to avoid API issues
-        const heart = scene.add.text(x, startY, '♥', { 
+        // Improved Visibility
+        const char = isFull ? '♥' : '♡';
+        const color = isFull ? '#e74c3c' : '#aaaaaa'; 
+        
+        const heart = scene.add.text(x, startY, char, { 
             fontSize: '32px', 
-            fill: isFull ? '#e74c3c' : '#550000', // Bright red vs Dark red
+            fill: color,
             stroke: '#000000',
             strokeThickness: 2,
-            fontFamily: 'Arial'
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(1001); // Stick to screen
+            fontFamily: 'monospace' // Monospace helps alignment
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1001); 
 
         scene.heartGroup.add(heart);
     }
@@ -4735,8 +4758,8 @@ function setupTouchControls() {
                  let rx = cx - 330 * finalScale;
                  let ry = cy - 180 * finalScale;
                  
-                 // Expanded Mask Area by 2px to prevent rounding clip issues
-                 compendiumUI.maskShape.fillRect(rx - 2, ry - 2, rw + 4, rh + 4);
+                 // Expanded Mask Area by 10px to prevent rounding clip issues
+                 compendiumUI.maskShape.fillRect(rx - 10, ry - 10, rw + 20, rh + 20);
              }
         }
         if (typeof inventoryUI !== 'undefined' && inventoryUI) {
@@ -4757,7 +4780,7 @@ function setupTouchControls() {
                  let rx = cx - 300 * scaleFinal;
                  let ry = cy - 150 * scaleFinal;
                  // Expanded
-                 inventoryUI.maskShape.fillRect(rx - 2, ry - 2, rw + 4, rh + 4);
+                 inventoryUI.maskShape.fillRect(rx - 10, ry - 10, rw + 20, rh + 20);
              }
         }
     };
