@@ -948,16 +948,10 @@ function create() {
     // --- Camera Centering for RESIZE mode ---
     this.scale.on('resize', (gameSize) => {
         // Keep the camera centered on the 800x600 play area
-        // The play area center is 400, 300
-        const width = gameSize.width;
-        const height = gameSize.height;
-        
-        this.cameras.main.setScroll(
-            400 - width / 2, 
-            300 - height / 2
-        );
+        this.cameras.main.centerOn(400, 300);
     });
     // Trigger once initially
+    this.cameras.main.centerOn(400, 300);
     const initWidth = this.scale.width;
     const initHeight = this.scale.height;
     this.cameras.main.setScroll(400 - initWidth/2, 300 - initHeight/2);
@@ -4469,9 +4463,9 @@ function setupTouchControls() {
 
     // --- 1. Left Visual Joystick ---
     // Position dynamically based on screen height
-    // Lowered offset to be closer to bottom edge (80px instead of 120px)
-    let joyX = 120;
-    let joyY = this.scale.height - 80; 
+    // Lowered offset further to 60px
+    let joyX = 100;
+    let joyY = this.scale.height - 60; 
     
     // Background Disk
     const joyBase = this.add.circle(joyX, joyY, 60, 0x333333, 0.5)
@@ -4527,15 +4521,15 @@ function setupTouchControls() {
 
     // --- 2. Right Side Buttons (Dynamic) ---
     // Moved buttons closer to corner (Lower Y, More Right)
-    let btnBaseX = this.scale.width - 80;
-    let btnBaseY = this.scale.height - 80;
+    let btnBaseX = this.scale.width - 60;
+    let btnBaseY = this.scale.height - 60;
     
     // UI Group for easier updates
     this.mobileUI = {};
 
     // A. Fire Button (Big Red Button) - Bottom Right
     const btnFire = this.add.circle(btnBaseX, btnBaseY, 50, 0xff0000, 0.4)
-        .setScrollFactor(0).setDepth(210).setInteractive();
+        .setScrollFactor(0).setDepth(210).setInteractive(); // Radius 50, so bottom is height-10
     const txtFire = this.add.text(btnBaseX, btnBaseY, "FIRE", { fontSize: '20px', fontStyle:'bold' }).setOrigin(0.5).setScrollFactor(0).setDepth(211);
     
     btnFire.on('pointerdown', () => mobileInput.fire = true);
@@ -4600,16 +4594,16 @@ function setupTouchControls() {
         const h = gameSize.height;
         
         // Update Joystick
-        joyY = h - 80;
-        joyX = 120;
+        joyY = h - 60;
+        joyX = 100;
         joyBase.setPosition(joyX, joyY);
         joyKnob.setPosition(joyX, joyY);
         leftStick.baseX = joyX;
         leftStick.baseY = joyY;
 
         // Update Buttons
-        btnBaseX = w - 80;
-        btnBaseY = h - 80;
+        btnBaseX = w - 60;
+        btnBaseY = h - 60;
         
         btnFire.setPosition(btnBaseX, btnBaseY);
         txtFire.setPosition(btnBaseX, btnBaseY);
@@ -4624,7 +4618,7 @@ function setupTouchControls() {
         txtPause.setPosition(w - 40, 40);
         
         // Recenter Camera just in case
-        this.cameras.main.setScroll(400 - w / 2, 300 - h / 2);
+        this.cameras.main.centerOn(400, 300);
     });
     
     btnFull.on('pointerdown', toggleFullScreen);
