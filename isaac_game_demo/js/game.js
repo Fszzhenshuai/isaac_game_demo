@@ -3538,9 +3538,16 @@ function createUIContainers(scene) {
     };
 
     // UI: Compendium
-    compendiumUI = scene.add.container(400, 300).setScrollFactor(0);
+    // Use scale.width/height for dynamic centering
+    compendiumUI = scene.add.container(scene.scale.width/2, scene.scale.height/2).setScrollFactor(0);
     compendiumUI.setDepth(200);
     compendiumUI.setVisible(false);
+    
+    // Scale down if screen is small (mobile landscape)
+    let compScale = 1;
+    if (scene.scale.height < 550) compScale = 0.7;
+    compendiumUI.setScale(compScale);
+
     const cbg = scene.add.graphics();
     cbg.fillStyle(0x111111, 0.95);
     cbg.fillRect(-350, -250, 700, 500);
@@ -3551,10 +3558,21 @@ function createUIContainers(scene) {
     createCloseBtn(compendiumUI, () => togglePause(scene)); 
     
     // Compendium Mask
+    // Mask geometry usually needs absolute world coords or screen coords if scrollFactor is 0
+    // But masks in containers are tricky. 
+    // Simplified: Create mask relative to container? No, Input masks are simple, render masks are absolute.
+    // We will update mask position in toggleCompendium or just hope it works for now. 
+    // Actually, let's use a simpler scroll approach or just clip it safely.
+    // For now, let's just make the container safe.
+
     const cShape = scene.make.graphics().setScrollFactor(0);
     cShape.fillStyle(0xffffff);
-    cShape.fillRect(70, 120, 660, 420); // Absolute: 400-330=70, 300-180=120. W=660, H=420
+    // Rough absolute coords assuming center is 400,300. 
+    // If center moves, mask MUST move.
+    // We'll update mask in updateUI loop or make it dynamic.
+    cShape.fillRect(70, 120, 660, 420); 
     const cMask = cShape.createGeometryMask();
+    compendiumUI.maskShape = cShape; // Store ref to update later
 
     compendiumUI.contentContainer = scene.add.container(0, -180);
     compendiumUI.contentContainer.setMask(cMask);
@@ -3567,10 +3585,11 @@ function createUIContainers(scene) {
     compendiumUI.add(compendiumUI.scrollHandle);
 
     // UI: Inventory
-    inventoryUI = scene.add.container(400, 300).setScrollFactor(0);
+    inventoryUI = scene.add.container(scene.scale.width/2, scene.scale.height/2).setScrollFactor(0);
     inventoryUI.setDepth(200);
     inventoryUI.setVisible(false);
-    
+    inventoryUI.setScale(compScale); // Apply same scale
+
     // Background
     const bg = scene.add.graphics();
     bg.fillStyle(0x000000, 0.9);
@@ -3586,9 +3605,10 @@ function createUIContainers(scene) {
     // Mask for scrolling
     const shape = scene.make.graphics().setScrollFactor(0);
     shape.fillStyle(0xffffff);
-    shape.fillRect(100, 150, 600, 340); // Absolute coords approx: 400-300=100, 300-150=150. W=600, H=340
+    shape.fillRect(100, 150, 600, 340); 
     const mask = shape.createGeometryMask();
-    
+    inventoryUI.maskShape = shape; // Store ref
+
     // Scroll Container
     inventoryUI.scrollContainer = scene.add.container(0, -140); 
     inventoryUI.scrollContainer.setMask(mask);
@@ -4485,15 +4505,26 @@ function setupTouchControls() {
     joyBase.on('pointerdown', (p) => {
         leftStick.active = true;
         leftStick.pointerId = p.id;
-        leftStick.x = p.x; leftStick.y = p.y;
+        // USE SCREEN COORDINATES for initial press to avoid jump
+        // But logic needs relative diff. 
+        // p.position is Screen Space
+        // joyX/joyY is Screen Space
+        // We set leftStick.x/y to mimic logic but using Screen Coords?
+        // Actually, let's just use Screen Coords for the entire joystick logic
+        leftStick.x = p.position.x; 
+        leftStick.y = p.position.y;
     });
     
     // Global move handling is better for stick dragging outside base
     this.input.on('pointermove', (p) => {
         if (leftStick.active && p.id === leftStick.pointerId) {
+            // Use SCREEN coordinates
+            let px = p.position.x;
+            let py = p.position.y;
+            
             // Clamp distance visually
-            let dist = Phaser.Math.Distance.Between(joyX, joyY, p.x, p.y);
-            let angle = Phaser.Math.Angle.Between(joyX, joyY, p.x, p.y);
+            let dist = Phaser.Math.Distance.Between(joyX, joyY, px, py);
+            let angle = Phaser.Math.Angle.Between(joyX, joyY, px, py);
             if (dist > 60) dist = 60;
             
             // Update visual knob
@@ -4501,8 +4532,14 @@ function setupTouchControls() {
             joyKnob.y = joyY + Math.sin(angle) * dist;
             
             // Update logic inputs
-            leftStick.x = p.x; 
-            leftStick.y = p.y;
+            // Map the screen-space joystick delta to the physics logic
+            // The physics logic expects leftStick.x/y to be raw pointer values, 
+            // and compares them to leftStick.baseX/Y (which are joyX/joyY).
+            // So if we set leftStick.x = px (Screen), and leftStick.baseX = joyX (Screen),
+            // The delta (px - joyX) is correct.
+            leftStick.x = px; 
+            leftStick.y = py;
+            
             // Hack to keep baseX static
             leftStick.baseX = joyX;
             leftStick.baseY = joyY;
@@ -4599,6 +4636,9 @@ function setupTouchControls() {
         joyBase.setPosition(joyX, joyY);
         joyKnob.setPosition(joyX, joyY);
         leftStick.baseX = joyX;
+        // leftStick.baseY should NOT be updated here to joyY 
+        // because the 'resize' event might trigger during a drag?
+        // No, resize resets UI. Drag will be cancelled.
         leftStick.baseY = joyY;
 
         // Update Buttons
@@ -4616,6 +4656,38 @@ function setupTouchControls() {
         
         btnPause.setPosition(w - 40, 40);
         txtPause.setPosition(w - 40, 40);
+
+        // Update UI Centers
+        if (compendiumUI) {
+             compendiumUI.setPosition(w/2, h/2);
+             // Update Mask if needed - Scale mask relative to center?
+             // Mask rects were hardcoded. We need to clear and redraw mask helper
+             if (compendiumUI.maskShape) {
+                 compendiumUI.maskShape.clear();
+                 compendiumUI.maskShape.fillStyle(0xffffff);
+                 // Original Rect: x=70, y=120, w=660, h=420 (Based on 400,300 center)
+                 // New Rect: x = w/2 - 330, y = h/2 - 180 ?
+                 // Relative to Screen TopLeft (0,0)
+                 let cx = w/2; let cy = h/2;
+                 // Comp Container content starts at -180 y?
+                 // Let's approximate: Center - Width/2 ...
+                 // Mask needs to cover the content area.
+                 // Content is roughly -330 to +330 X, -180 to +230 Y relative to center
+                 // So Mask X = cx - 330, Y = cy - 180, W=660, H=420?
+                 compendiumUI.maskShape.fillRect(cx - 330 * compendiumUI.scaleX, cy - 180 * compendiumUI.scaleY, 660 * compendiumUI.scaleX, 420 * compendiumUI.scaleY);
+             }
+        }
+        if (inventoryUI) {
+             inventoryUI.setPosition(w/2, h/2);
+             if (inventoryUI.maskShape) {
+                 inventoryUI.maskShape.clear();
+                 inventoryUI.maskShape.fillStyle(0xffffff);
+                 let cx = w/2; let cy = h/2;
+                 // Original: 100, 150, 600, 340 (Based on 400,300)
+                 // Rect relative to center 400,300 was: -300,+300 x, -150,+190 y
+                 inventoryUI.maskShape.fillRect(cx - 300 * inventoryUI.scaleX, cy - 150 * inventoryUI.scaleY, 600 * inventoryUI.scaleX, 340 * inventoryUI.scaleY);
+             }
+        }
         
         // Recenter Camera just in case
         this.cameras.main.centerOn(400, 300);
