@@ -4685,12 +4685,9 @@ function setupTouchControls() {
     });
 
     // --- Dynamic Resizing for UI ---
-    this.scale.on('resize', (gameSize) => {
-        const w = gameSize.width;
-        const h = gameSize.height;
-        
+    const layoutUI = (w, h) => {
         // Update Joystick
-        joyY = h - 100; // Raised higher as requested
+        joyY = h - 100; // Raised higher
         joyX = 100;
         joyBase.setPosition(joyX, joyY);
         joyKnob.setPosition(joyX, joyY);
@@ -4699,7 +4696,7 @@ function setupTouchControls() {
 
         // Update Buttons
         btnBaseX = w - 60;
-        btnBaseY = h - 80; // Slightly higher too
+        btnBaseY = h - 80;
         
         btnFire.setPosition(btnBaseX, btnBaseY);
         txtFire.setPosition(btnBaseX, btnBaseY);
@@ -4714,14 +4711,14 @@ function setupTouchControls() {
         txtPause.setPosition(w - 40, 40);
 
         // Update UI Centers and Scaling for Compendium
-        if (compendiumUI) {
+        if (typeof compendiumUI !== 'undefined' && compendiumUI) {
              compendiumUI.setPosition(w/2, h/2);
              
              // Dynamic Scale Calculation
              // Target size ~660x420 content.
              // We want padding of 40px all around.
-             const availW = w - 80;
-             const availH = h - 80;
+             const availW = w - 40; // Less padding to maximize screen usage
+             const availH = h - 40;
              const scaleX = availW / 700;
              const scaleY = availH / 500;
              const finalScale = Math.min(1, scaleX, scaleY);
@@ -4731,23 +4728,10 @@ function setupTouchControls() {
                  compendiumUI.maskShape.clear();
                  compendiumUI.maskShape.fillStyle(0xffffff);
                  let cx = w/2; let cy = h/2;
-                 // Mask must cover the content relative to new center and scale
-                 // The content mask is hardcoded for the content container
-                 // Rect X/Y are relative to screen top-left (0,0) because mask is absolute?
-                 // No, standard GeometryMask uses world coordinates.
-                 // With ScrollFactor(0), it uses Screen Coordinates (0,0 at TL).
-                 // Center is w/2, h/2.
-                 // Content Box is 660x420.
-                 // Scaled W = 660 * finalScale. Scaled H = 420 * finalScale.
-                 // TopLeft X = cx - (330 * finalScale) ?
-                 // The default content starts roughly 180px up from center?
-                 // Original Rect: x=70, y=120 (for center 400,300) -> -330, -180 relative to center 
                  
                  let rw = 660 * finalScale;
                  let rh = 420 * finalScale;
-                 // Center of content area relative to container center is roughly (0, +30) ? 
-                 // Wait, original rect 70,120 (400 center) => Left=-330, Top=-180
-                 // So relative to center, it is X-330, Y-180.
+                 // Center of content area relative to container center
                  let rx = cx - 330 * finalScale;
                  let ry = cy - 180 * finalScale;
                  
@@ -4755,11 +4739,11 @@ function setupTouchControls() {
                  compendiumUI.maskShape.fillRect(rx - 2, ry - 2, rw + 4, rh + 4);
              }
         }
-        if (inventoryUI) {
+        if (typeof inventoryUI !== 'undefined' && inventoryUI) {
              inventoryUI.setPosition(w/2, h/2);
              
-             const availW = w - 80;
-             const availH = h - 80;
+             const availW = w - 40;
+             const availH = h - 40;
              const scaleFinal = Math.min(1, availW/600, availH/340);
              inventoryUI.setScale(scaleFinal);
 
@@ -4776,9 +4760,15 @@ function setupTouchControls() {
                  inventoryUI.maskShape.fillRect(rx - 2, ry - 2, rw + 4, rh + 4);
              }
         }
-        
-        // Recenter Camera just in case? No, following player.
+    };
+
+    this.scale.on('resize', (gameSize) => {
+        layoutUI(gameSize.width, gameSize.height);
+        this.cameras.main.setDeadzone(10, 10); // Re-apply deadzone
     });
+
+    // Force initial layout
+    layoutUI(this.scale.width, this.scale.height);
     
     btnFull.on('pointerdown', toggleFullScreen);
 
